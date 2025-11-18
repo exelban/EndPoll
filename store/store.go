@@ -35,7 +35,7 @@ type Interface interface {
 	Close() error
 }
 
-func New(ctx context.Context, typ string, cfg *types.Cfg) (Interface, error) {
+func New(ctx context.Context, typ, path string, cfg *types.Cfg) (Interface, error) {
 	var store Interface
 
 	switch typ {
@@ -43,7 +43,7 @@ func New(ctx context.Context, typ string, cfg *types.Cfg) (Interface, error) {
 		store = NewMemory(ctx)
 		log.Printf("[INFO] using memory storage")
 	default:
-		dbPath := "./data"
+		dbPath := path
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 			if err := os.Mkdir(dbPath, 0755); err != nil {
 				return nil, fmt.Errorf("failed to create data directory: %w", err)

@@ -33,15 +33,27 @@ func CORS(next http.Handler) http.Handler {
 	})
 }
 
-func Healthz(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/healthz" {
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("ok"))
-			return
+func Ping(path ...string) func(http.Handler) http.Handler {
+	handlers := make(map[string]bool)
+	for _, p := range path {
+		handlers[p] = true
+	}
+	if len(handlers) == 0 {
+		handlers["/ping"] = true
+	}
+
+	f := func(h http.Handler) http.Handler {
+		fn := func(w http.ResponseWriter, r *http.Request) {
+			if _, ok := handlers[r.URL.Path]; ok {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("ok"))
+				return
+			}
+			h.ServeHTTP(w, r)
 		}
-		next.ServeHTTP(w, r)
-	})
+		return http.HandlerFunc(fn)
+	}
+	return f
 }
 
 func Info(app, version string) func(http.Handler) http.Handler {

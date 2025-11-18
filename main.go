@@ -21,7 +21,10 @@ import (
 type arguments struct {
 	ConfigPath string `long:"config-path" env:"CONFIG_PATH" default:"./config.yaml" description:"path to the configuration file"`
 
-	StorageType string `long:"storage-type" env:"STORAGE_TYPE" default:"bolt" description:"storage type"`
+	Storage struct {
+		Type string `long:"type" env:"TYPE" default:"bolt" description:"storage type"`
+		Path string `long:"path" env:"PATH" default:"./data" description:"storage path"`
+	} `group:"storage" namespace:"storage" env-namespace:"STORAGE"`
 
 	SMTP struct {
 		Host     string   `long:"host" env:"HOST" description:"SMTP host"`
@@ -92,7 +95,7 @@ func create(ctx context.Context, args arguments) (*app, error) {
 		return nil, fmt.Errorf("new config: %w", err)
 	}
 
-	storage, err := store.New(ctx, args.StorageType, cfg)
+	storage, err := store.New(ctx, args.Storage.Type, args.Storage.Path, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("new store: %w", err)
 	}
