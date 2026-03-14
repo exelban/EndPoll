@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -309,7 +309,7 @@ func TestStore_FindEvents(t *testing.T) {
 func TestStore_aggregation(t *testing.T) {
 	t.Run("one day history", func(t *testing.T) {
 		ctx := context.Background()
-		s, err := New(ctx, "memory", nil)
+		s, err := New(ctx, "memory", "", &types.Cfg{})
 		require.NoError(t, err)
 		require.NotNil(t, s)
 
@@ -324,7 +324,7 @@ func TestStore_aggregation(t *testing.T) {
 	})
 	t.Run("random days history back", func(t *testing.T) {
 		ctx := context.Background()
-		s, err := New(ctx, "memory", nil)
+		s, err := New(ctx, "memory", "", &types.Cfg{})
 		require.NoError(t, err)
 		require.NotNil(t, s)
 
@@ -340,7 +340,7 @@ func TestStore_aggregation(t *testing.T) {
 	})
 	t.Run("uptime, status and responseTime type per day", func(t *testing.T) {
 		ctx := context.Background()
-		s, err := New(ctx, "memory", nil)
+		s, err := New(ctx, "memory", "", &types.Cfg{})
 		require.NoError(t, err)
 		require.NotNil(t, s)
 
@@ -405,4 +405,250 @@ func TestStore_aggregation(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestAggregateDay(t *testing.T) {
+	ts := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	t.Run("empty responses", func(t *testing.T) {
+		r := AggregateDay(ts, []*types.HttpResponse{})
+		require.True(t, r.IsAggregated)
+		require.Equal(t, 0, r.Count)
+		require.Equal(t, float64(0), r.Uptime)
+		require.Equal(t, ts, r.Timestamp)
+	})
+
+	t.Run("all up", func(t *testing.T) {
+		responses := []*types.HttpResponse{
+			{StatusType: types.UP, Time: 100 * time.Millisecond},
+			{StatusType: types.UP, Time: 200 * time.Millisecond},
+			{StatusType: types.UP, Time: 300 * time.Millisecond},
+		}
+		r := AggregateDay(ts, responses)
+		require.True(t, r.IsAggregated)
+		require.Equal(t, 3, r.Count)
+		require.Equal(t, float64(1), r.Uptime)
+		require.Equal(t, types.UP, r.StatusType)
+		require.Equal(t, 200*time.Millisecond, r.Time)
+	})
+
+	t.Run("all down", func(t *testing.T) {
+		responses := []*types.HttpResponse{
+			{StatusType: types.DOWN, Time: 100 * time.Millisecond},
+			{StatusType: types.DOWN, Time: 200 * time.Millisecond},
+		}
+		r := AggregateDay(ts, responses)
+		require.Equal(t, float64(0), r.Uptime)
+		require.Equal(t, types.DOWN, r.StatusType)
+	})
+
+	t.Run("mixed status produces degraded", func(t *testing.T) {
+		responses := make([]*types.HttpResponse, 0)
+		for i := 0; i < 10; i++ {
+			s := types.UP
+			if i < 3 {
+				s = types.DOWN
+			}
+			responses = append(responses, &types.HttpResponse{StatusType: s, Time: 50 * time.Millisecond})
+		}
+		r := AggregateDay(ts, responses)
+		require.Equal(t, float64(7)/float64(10), r.Uptime)
+		require.Equal(t, types.DEGRADED, r.StatusType)
+	})
+
+	t.Run("unknown counts as not up", func(t *testing.T) {
+		responses := []*types.HttpResponse{
+			{StatusType: types.Unknown, Time: 100 * time.Millisecond},
+			{StatusType: types.Unknown, Time: 100 * time.Millisecond},
+		}
+		r := AggregateDay(ts, responses)
+		require.Equal(t, float64(0), r.Uptime)
+		require.Equal(t, types.DOWN, r.StatusType)
+	})
+
+	t.Run("just above 95% is UP", func(t *testing.T) {
+		responses := make([]*types.HttpResponse, 100)
+		for i := range responses {
+			s := types.UP
+			if i < 4 {
+				s = types.DOWN
+			}
+			responses[i] = &types.HttpResponse{StatusType: s, Time: time.Millisecond}
+		}
+		r := AggregateDay(ts, responses)
+		require.Equal(t, types.UP, r.StatusType)
+	})
+
+	t.Run("exactly 95% is DEGRADED", func(t *testing.T) {
+		responses := make([]*types.HttpResponse, 100)
+		for i := range responses {
+			s := types.UP
+			if i < 5 {
+				s = types.DOWN
+			}
+			responses[i] = &types.HttpResponse{StatusType: s, Time: time.Millisecond}
+		}
+		r := AggregateDay(ts, responses)
+		require.Equal(t, types.DEGRADED, r.StatusType)
+	})
+}
+
+func TestStore_LastResponse(t *testing.T) {
+	ctx := context.Background()
+
+	stores := map[string]func() Interface{
+		"memory": func() Interface {
+			return NewMemory(ctx)
+		},
+		"bolt": func() Interface {
+			file, err := os.CreateTemp("", "test_last_*.db")
+			require.NoError(t, err)
+			defer os.RemoveAll(file.Name())
+			b, err := NewBolt(ctx, file.Name())
+			require.NoError(t, err)
+			return b
+		},
+	}
+
+	for name, f := range stores {
+		t.Run(name, func(t *testing.T) {
+			t.Run("no responses", func(t *testing.T) {
+				s := f()
+				resp, err := s.LastResponse(ctx, "nonexistent")
+				require.NoError(t, err)
+				require.Nil(t, resp)
+			})
+
+			t.Run("returns most recent", func(t *testing.T) {
+				s := f()
+				now := time.Now()
+				require.NoError(t, s.AddResponse(ctx, "host", &types.HttpResponse{
+					Timestamp: now.Add(-2 * time.Minute), Code: 200,
+				}))
+				require.NoError(t, s.AddResponse(ctx, "host", &types.HttpResponse{
+					Timestamp: now.Add(-1 * time.Minute), Code: 201,
+				}))
+				require.NoError(t, s.AddResponse(ctx, "host", &types.HttpResponse{
+					Timestamp: now, Code: 202,
+				}))
+
+				resp, err := s.LastResponse(ctx, "host")
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+				require.Equal(t, 202, resp.Code)
+			})
+		})
+	}
+}
+
+func TestStore_DeleteIncident(t *testing.T) {
+	ctx := context.Background()
+
+	stores := map[string]func() Interface{
+		"memory": func() Interface {
+			return NewMemory(ctx)
+		},
+		"bolt": func() Interface {
+			file, err := os.CreateTemp("", "test_delinc_*.db")
+			require.NoError(t, err)
+			defer os.RemoveAll(file.Name())
+			b, err := NewBolt(ctx, file.Name())
+			require.NoError(t, err)
+			return b
+		},
+	}
+	now := time.Now()
+
+	for name, f := range stores {
+		t.Run(name, func(t *testing.T) {
+			s := f()
+			for i := 0; i < 5; i++ {
+				require.NoError(t, s.AddIncident(ctx, "host", &types.Incident{
+					StartTS: now.Add(-time.Duration(i) * time.Minute),
+				}))
+				time.Sleep(time.Millisecond)
+			}
+
+			incidents, err := s.FindIncidents(ctx, "host", 0, 0)
+			require.NoError(t, err)
+			require.Len(t, incidents, 5)
+
+			// delete the 3rd incident
+			require.NoError(t, s.DeleteIncident(ctx, "host", incidents[2].ID))
+
+			incidents, err = s.FindIncidents(ctx, "host", 0, 0)
+			require.NoError(t, err)
+			require.Len(t, incidents, 4)
+		})
+	}
+}
+
+func TestStore_DeleteIncident_NonExistent(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("memory", func(t *testing.T) {
+		s := NewMemory(ctx)
+		require.NoError(t, s.DeleteIncident(ctx, "nonexistent", 999))
+	})
+
+	t.Run("bolt", func(t *testing.T) {
+		file, err := os.CreateTemp("", "test_delne_*.db")
+		require.NoError(t, err)
+		defer os.RemoveAll(file.Name())
+		s, err := NewBolt(ctx, file.Name())
+		require.NoError(t, err)
+		require.NoError(t, s.DeleteIncident(ctx, "nonexistent", 999))
+	})
+}
+
+func TestStore_FindResponses_Empty(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("memory", func(t *testing.T) {
+		s := NewMemory(ctx)
+		resp, err := s.FindResponses(ctx, "nonexistent")
+		require.NoError(t, err)
+		require.Empty(t, resp)
+	})
+
+	t.Run("bolt", func(t *testing.T) {
+		file, err := os.CreateTemp("", "test_findempty_*.db")
+		require.NoError(t, err)
+		defer os.RemoveAll(file.Name())
+		s, err := NewBolt(ctx, file.Name())
+		require.NoError(t, err)
+
+		resp, err := s.FindResponses(ctx, "nonexistent")
+		require.NoError(t, err)
+		require.Empty(t, resp)
+	})
+}
+
+func TestStore_FindIncidents_Empty(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("memory", func(t *testing.T) {
+		s := NewMemory(ctx)
+		inc, err := s.FindIncidents(ctx, "nonexistent", 0, 10)
+		require.NoError(t, err)
+		require.Empty(t, inc)
+	})
+
+	t.Run("bolt", func(t *testing.T) {
+		file, err := os.CreateTemp("", "test_findinc_*.db")
+		require.NoError(t, err)
+		defer os.RemoveAll(file.Name())
+		s, err := NewBolt(ctx, file.Name())
+		require.NoError(t, err)
+
+		inc, err := s.FindIncidents(ctx, "nonexistent", 0, 10)
+		require.NoError(t, err)
+		require.Empty(t, inc)
+	})
+}
+
+func TestHoursToMidnight(t *testing.T) {
+	d := hoursToMidnight()
+	require.Greater(t, d, time.Duration(0))
+	require.LessOrEqual(t, d, 24*time.Hour+11*time.Minute)
 }

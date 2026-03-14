@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/types"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -18,6 +18,12 @@ func (d *Dialer) mongoCall(ctx context.Context, h *types.Host) (response types.H
 	ctx_, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	client, err := mongo.Connect(ctx_, options.Client().ApplyURI(h.URL))
+	if err != nil {
+		log.Printf("[ERROR] connect mongo %v", err)
+		response.Body = err.Error()
+		response.Code = 501
+		return
+	}
 	defer func() {
 		if err = client.Disconnect(ctx_); err != nil {
 			log.Printf("[ERROR] disconnect mongo %v", err)
@@ -27,8 +33,6 @@ func (d *Dialer) mongoCall(ctx context.Context, h *types.Host) (response types.H
 	response.Timestamp = time.Now()
 	response.OK = true
 
-	ctx_, cancel = context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
 	if err := client.Ping(ctx_, nil); err != nil {
 		log.Printf("[ERROR] ping mongo %v", err)
 		response.Body = err.Error()
@@ -43,7 +47,7 @@ func (d *Dialer) mongoCall(ctx context.Context, h *types.Host) (response types.H
 	mongoMetaData := MongoMetaData{}
 	db := client.Database("admin")
 
-	err = db.RunCommand(nil, bson.D{{"replSetGetStatus", 1}}).Decode(&mongoMetaData)
+	err = db.RunCommand(ctx_, bson.D{{"replSetGetStatus", 1}}).Decode(&mongoMetaData)
 	if err != nil {
 		if strings.Contains(err.Error(), "NoReplicationEnabled") && strings.Contains(h.URL, "replicaSet") {
 			response.Code = 502

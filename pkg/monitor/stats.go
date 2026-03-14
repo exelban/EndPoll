@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/exelban/JAM/store"
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/store"
+	"github.com/exelban/EndPoll/types"
 )
 
 // Stats - returns the stats of all hosts grouped by groups
@@ -119,7 +119,7 @@ func (m *Monitor) StatsByID(ctx context.Context, id string, dayReport bool) (*ty
 		return nil, fmt.Errorf("failed to get history: %w", err)
 	}
 
-	incidents, err := m.Store.FindIncidents(ctx, id, -1, 30)
+	incidents, err := m.Store.FindIncidents(ctx, id, 0, 30)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get incidents: %w", err)
 	}
@@ -290,6 +290,9 @@ func genChart(history []*types.HttpResponse, interval time.Duration, dayReport b
 	}, uptime, (responseTime / time.Duration(len(points))).Truncate(time.Millisecond).String()
 }
 func genIntervals(points []*types.Point) []string {
+	if len(points) < 61 {
+		return []string{"", "", ""}
+	}
 	p := []time.Time{points[0].TS, points[30].TS, points[60].TS}
 	for i, ts := range p {
 		if ts.IsZero() {
@@ -346,7 +349,9 @@ func getDetails(responses []*types.HttpResponse, incidents []*types.Incident) *t
 		}
 	}
 
-	uptime30Days = float64(last30DaysUp) * 100 / float64(last30DaysCount)
+	if last30DaysCount > 0 {
+		uptime30Days = float64(last30DaysUp) * 100 / float64(last30DaysCount)
+	}
 	if last30DaysUp != 0 {
 		responseTime30Days /= time.Duration(last30DaysUp)
 	}
@@ -402,7 +407,7 @@ func generateGroupStatus(hosts *[]types.Stat, i *int) types.StatusType {
 		}
 	}
 
-	if upHosts == allHosts || unknownHosts > 0 && upHosts > 0 {
+	if upHosts == allHosts || (unknownHosts > 0 && upHosts > 0 && downHosts == 0 && degradedHosts == 0) {
 		return types.UP
 	} else if downHosts == allHosts {
 		return types.DOWN

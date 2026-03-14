@@ -9,11 +9,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/exelban/JAM/api"
-	"github.com/exelban/JAM/pkg/html"
-	"github.com/exelban/JAM/pkg/monitor"
-	"github.com/exelban/JAM/store"
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/api"
+	"github.com/exelban/EndPoll/pkg/html"
+	"github.com/exelban/EndPoll/pkg/monitor"
+	"github.com/exelban/EndPoll/store"
+	"github.com/exelban/EndPoll/types"
 	"github.com/jessevdk/go-flags"
 	"github.com/pkgz/logg"
 )

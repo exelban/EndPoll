@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/types"
 )
 
 type Memory struct {

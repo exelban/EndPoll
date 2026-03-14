@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/types"
 )
 
 type Slack struct {
@@ -48,6 +48,7 @@ func (s *Slack) send(subject, body string) error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	buf := new(bytes.Buffer)
 	_, err = buf.ReadFrom(resp.Body)
@@ -69,7 +70,7 @@ func (s *Slack) normalize(host *types.Host, status types.StatusType) (string, st
 	}
 
 	name := host.URL
-	if host.Name != nil && *host.Name == "" {
+	if host.Name != nil && *host.Name != "" {
 		name = *host.Name
 	}
 

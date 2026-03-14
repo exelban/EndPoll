@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/types"
 	bolt "go.etcd.io/bbolt"
 )
 

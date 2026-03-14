@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/types"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -44,7 +44,7 @@ func (t *Telegram) normalize(host *types.Host, status types.StatusType) (string,
 	}
 
 	name := host.URL
-	if host.Name != nil && *host.Name == "" {
+	if host.Name != nil && *host.Name != "" {
 		name = *host.Name
 	}
 
@@ -99,8 +99,8 @@ func (t *Telegram) sendToChat(chatID, msg string) error {
 		Code        int    `json:"code"`
 		Description string `json:"description"`
 	}{}
-	if er := json.Unmarshal(body, &response); err != nil {
-		return fmt.Errorf("unmarshal body to the error: %w", er)
+	if err := json.Unmarshal(body, &response); err != nil {
+		return fmt.Errorf("unmarshal body to the error: %w", err)
 	}
 
 	return errors.New(response.Description)

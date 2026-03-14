@@ -4,10 +4,10 @@ import (
 	"context"
 	"sync"
 
-	"github.com/exelban/JAM/pkg/dialer"
-	"github.com/exelban/JAM/pkg/notify"
-	"github.com/exelban/JAM/store"
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/pkg/dialer"
+	"github.com/exelban/EndPoll/pkg/notify"
+	"github.com/exelban/EndPoll/store"
+	"github.com/exelban/EndPoll/types"
 )
 
 // Monitor - main service which track the hosts liveness
@@ -19,9 +19,10 @@ type Monitor struct {
 
 	watchers map[string]*watcher
 
-	mu   sync.RWMutex
-	ctx  context.Context
-	once sync.Once
+	mu     sync.RWMutex
+	ctx    context.Context
+	cancel context.CancelFunc
+	once   sync.Once
 }
 
 // Run - run the monitor. Creates jobs for each host in the separate threads
@@ -31,18 +32,17 @@ func (m *Monitor) Run(cfg *types.Cfg) error {
 	})
 
 	m.mu.Lock()
-	{
-		if m.ctx != nil {
-			m.ctx.Done()
-		}
-		m.ctx = context.Background()
-		m.dialer = dialer.New(cfg.MaxConn)
-		n, err := notify.New(m.ctx, cfg)
-		if err != nil {
-			return err
-		}
-		m.notify = n
+	if m.cancel != nil {
+		m.cancel()
 	}
+	m.ctx, m.cancel = context.WithCancel(context.Background())
+	m.dialer = dialer.New(cfg.MaxConn)
+	n, err := notify.New(m.ctx, cfg)
+	if err != nil {
+		m.mu.Unlock()
+		return err
+	}
+	m.notify = n
 	m.mu.Unlock()
 
 	// add hosts which are does not have watchers, update if some of them changed

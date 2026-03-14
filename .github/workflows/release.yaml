@@ -6,7 +6,23 @@ on:
       - '*'
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Run tests
+        run: go test ./...
+
   build-and-push:
+    needs: test
     runs-on: ubuntu-latest
 
     steps:
@@ -43,8 +59,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: VERSION=${{ env.TAG }}
           tags: |
-            ${{ github.repository_owner }}/jam:${{ env.TAG }}
-            ${{ github.repository_owner }}/jam:latest
+            ${{ github.repository_owner }}/endpoll:${{ env.TAG }}
+            ${{ github.repository_owner }}/endpoll:latest
 
       - name: Build and push Docker image to GitHub Container Registry
         uses: docker/build-push-action@v5
@@ -53,8 +69,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: VERSION=${{ env.TAG }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/jam:${{ env.TAG }}
-            ghcr.io/${{ github.repository_owner }}/jam:latest
+            ghcr.io/${{ github.repository_owner }}/endpoll:${{ env.TAG }}
+            ghcr.io/${{ github.repository_owner }}/endpoll:latest
 
       - name: Generate changelog from last tag
         id: changelog

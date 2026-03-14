@@ -11,12 +11,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/types"
 )
 
 // httpCall makes a HTTP request to the host
 func (d *Dialer) httpCall(ctx context.Context, h *types.Host) (response types.HttpResponse) {
-	req, err := http.NewRequest(h.Method, h.URL, nil)
+	method := h.Method
+	if method == "" {
+		method = http.MethodGet
+	}
+	req, err := http.NewRequest(method, h.URL, nil)
 	if err != nil {
 		log.Printf("[ERROR] prepare request %v", err)
 		return
@@ -61,6 +65,7 @@ func (d *Dialer) httpCall(ctx context.Context, h *types.Host) (response types.Ht
 
 	response.Timestamp = time.Now()
 
+	start = time.Now()
 	startTime := time.Now()
 	resp, err := client.Do(req)
 	response.Time = time.Since(startTime)

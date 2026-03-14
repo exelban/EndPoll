@@ -80,3 +80,109 @@ func TestHost_GenerateID(t *testing.T) {
 		require.Equal(t, expected, h.GenerateID())
 	})
 }
+
+func TestHost_GetType(t *testing.T) {
+	t.Run("explicit type takes priority", func(t *testing.T) {
+		h := Host{URL: "http://example.com", Type: ICMPType}
+		require.Equal(t, ICMPType, h.GetType())
+	})
+	t.Run("http url", func(t *testing.T) {
+		h := Host{URL: "http://example.com"}
+		require.Equal(t, HttpType, h.GetType())
+	})
+	t.Run("https url", func(t *testing.T) {
+		h := Host{URL: "https://example.com"}
+		require.Equal(t, HttpType, h.GetType())
+	})
+	t.Run("mongodb url", func(t *testing.T) {
+		h := Host{URL: "mongodb://localhost:27017"}
+		require.Equal(t, MongoType, h.GetType())
+	})
+	t.Run("ipv4 address", func(t *testing.T) {
+		h := Host{URL: "192.168.1.1"}
+		require.Equal(t, ICMPType, h.GetType())
+	})
+	t.Run("hostname defaults to http", func(t *testing.T) {
+		h := Host{URL: "example.com"}
+		require.Equal(t, HttpType, h.GetType())
+	})
+	t.Run("ipv4 with leading zeros", func(t *testing.T) {
+		h := Host{URL: "0.0.0.0"}
+		require.Equal(t, ICMPType, h.GetType())
+	})
+	t.Run("ipv4 boundary 255.255.255.255", func(t *testing.T) {
+		h := Host{URL: "255.255.255.255"}
+		require.Equal(t, ICMPType, h.GetType())
+	})
+}
+
+func TestIsIPv4(t *testing.T) {
+	t.Run("valid", func(t *testing.T) {
+		require.True(t, isIPv4("192.168.1.1"))
+		require.True(t, isIPv4("0.0.0.0"))
+		require.True(t, isIPv4("255.255.255.255"))
+		require.True(t, isIPv4("10.0.0.1"))
+	})
+	t.Run("invalid", func(t *testing.T) {
+		require.False(t, isIPv4("256.0.0.1"))
+		require.False(t, isIPv4("1.2.3"))
+		require.False(t, isIPv4("1.2.3.4.5"))
+		require.False(t, isIPv4("abc.def.ghi.jkl"))
+		require.False(t, isIPv4(""))
+		require.False(t, isIPv4("-1.0.0.1"))
+	})
+}
+
+func TestHost_SecureURL(t *testing.T) {
+	t.Run("http url unchanged", func(t *testing.T) {
+		h := Host{URL: "https://example.com/api"}
+		require.Equal(t, "https://example.com/api", h.SecureURL())
+	})
+	t.Run("mongo url without credentials", func(t *testing.T) {
+		h := Host{URL: "mongodb://localhost:27017"}
+		require.Equal(t, "mongodb://localhost:27017", h.SecureURL())
+	})
+	t.Run("mongo url with credentials", func(t *testing.T) {
+		h := Host{URL: "mongodb://user:password@localhost:27017"}
+		url := h.SecureURL()
+		require.Contains(t, url, "*****")
+		require.NotContains(t, url, "password")
+	})
+	t.Run("mongo url without @ sign", func(t *testing.T) {
+		h := Host{URL: "mongodb://localhost:27017/db"}
+		require.Equal(t, "mongodb://localhost:27017/db", h.SecureURL())
+	})
+}
+
+func TestHost_Status_NilConditions(t *testing.T) {
+	h := Host{}
+	require.True(t, h.Status(200, nil))
+	require.False(t, h.Status(500, nil))
+}
+
+func TestHost_GenerateID_Uniqueness(t *testing.T) {
+	t.Run("different urls produce different ids", func(t *testing.T) {
+		h1 := Host{URL: "http://a.com"}
+		h2 := Host{URL: "http://b.com"}
+		require.NotEqual(t, h1.GenerateID(), h2.GenerateID())
+	})
+	t.Run("same url different group produce different ids", func(t *testing.T) {
+		g1 := "group1"
+		g2 := "group2"
+		h1 := Host{URL: "http://a.com", Group: &g1}
+		h2 := Host{URL: "http://a.com", Group: &g2}
+		require.NotEqual(t, h1.GenerateID(), h2.GenerateID())
+	})
+	t.Run("same url with and without group produce different ids", func(t *testing.T) {
+		g := "group"
+		h1 := Host{URL: "http://a.com"}
+		h2 := Host{URL: "http://a.com", Group: &g}
+		require.NotEqual(t, h1.GenerateID(), h2.GenerateID())
+	})
+	t.Run("deterministic", func(t *testing.T) {
+		h := Host{URL: "http://a.com"}
+		id1 := h.GenerateID()
+		id2 := h.GenerateID()
+		require.Equal(t, id1, id2)
+	})
+}

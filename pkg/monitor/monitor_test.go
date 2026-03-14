@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/exelban/JAM/store"
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/store"
+	"github.com/exelban/EndPoll/types"
 	"github.com/stretchr/testify/require"
 )
 

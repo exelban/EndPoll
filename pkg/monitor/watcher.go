@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/exelban/JAM/pkg/dialer"
-	"github.com/exelban/JAM/pkg/notify"
-	"github.com/exelban/JAM/store"
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/pkg/dialer"
+	"github.com/exelban/EndPoll/pkg/notify"
+	"github.com/exelban/EndPoll/store"
+	"github.com/exelban/EndPoll/types"
 )
 
 type watcher struct {

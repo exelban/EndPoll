@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/types"
 	"github.com/go-ping/ping"
 )
 

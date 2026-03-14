@@ -3,7 +3,7 @@ package dialer
 import (
 	"context"
 
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/types"
 )
 
 // Dialer - the request maker structure

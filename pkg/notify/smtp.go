@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/types"
 	gomail "gopkg.in/mail.v2"
 )
 
@@ -70,11 +70,10 @@ func (s *SMTP) send(subject, body string) error {
 	defer s.Unlock()
 
 	if s.last != nil && time.Since(*s.last) < time.Second {
+		wait := time.Second - time.Since(*s.last)
 		s.Unlock()
-		time.Sleep(time.Second - time.Since(*s.last))
+		time.Sleep(wait)
 		s.Lock()
-	} else {
-		s.last = nil
 	}
 
 	if !s.open {
@@ -94,7 +93,7 @@ func (s *SMTP) send(subject, body string) error {
 	message.SetBody("text/html", body)
 
 	if err := gomail.Send(s.sendCloser, message); err != nil {
-		log.Printf("[ERROR] send email: %v", err)
+		return fmt.Errorf("send email: %w", err)
 	}
 
 	now := time.Now()

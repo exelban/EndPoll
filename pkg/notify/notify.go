@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/types"
 )
 
 //go:generate moq -out mock_test.go . notify
@@ -47,6 +47,7 @@ func New(ctx context.Context, cfg *types.Cfg) (*Notify, error) {
 		telegram := &Telegram{
 			token:   cfg.Notifications.Telegram.Token,
 			chatIDs: cfg.Notifications.Telegram.ChatIDs,
+			timeout: time.Second * 10,
 		}
 		n.clients = append(n.clients, telegram)
 		log.Print("[INFO] Telegram notifications enabled")
@@ -66,7 +67,7 @@ func New(ctx context.Context, cfg *types.Cfg) (*Notify, error) {
 
 	if *cfg.Notifications.InitializationMessage {
 		for _, client := range n.clients {
-			if err := client.send("JAM status", "I'm online"); err != nil {
+			if err := client.send("EndPoll status", "I'm online"); err != nil {
 				log.Printf("[ERROR] send initialization message: %s", err)
 			}
 		}
@@ -79,7 +80,7 @@ func New(ctx context.Context, cfg *types.Cfg) (*Notify, error) {
 			case <-ctx.Done():
 				if cfg.Notifications.ShutdownMessage {
 					for _, client := range n.clients {
-						if err := client.send("JAM status", "Going offline..."); err != nil {
+						if err := client.send("EndPoll status", "Going offline..."); err != nil {
 							log.Printf("[ERROR] send shutdown message: %s", err)
 						}
 					}

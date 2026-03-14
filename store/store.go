@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/types"
 )
 
 type Interface interface {
@@ -49,7 +49,10 @@ func New(ctx context.Context, typ, path string, cfg *types.Cfg) (Interface, erro
 				return nil, fmt.Errorf("failed to create data directory: %w", err)
 			}
 		}
-		dbFilePath := fmt.Sprintf("%s/%s", dbPath, "jam.db")
+		dbFilePath := fmt.Sprintf("%s/%s", dbPath, "endpoll.db")
+		if legacyPath := fmt.Sprintf("%s/%s", dbPath, "jam.db"); fileExists(legacyPath) {
+			dbFilePath = legacyPath
+		}
 
 		s, err := NewBolt(ctx, dbFilePath)
 		if err != nil {
@@ -149,7 +152,7 @@ func AggregateDay(ts time.Time, responses []*types.HttpResponse) *types.HttpResp
 	}
 
 	for _, r := range responses {
-		if r.StatusType != types.DOWN {
+		if r.StatusType == types.UP {
 			aggregation.Uptime++
 		}
 		aggregation.Time += r.Time
@@ -207,4 +210,8 @@ func randInt(min, max int) int {
 }
 func hoursToMidnight() time.Duration {
 	return time.Until(time.Now().Truncate(24 * time.Hour).Add(24 * time.Hour).Add(time.Minute * 10))
+}
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

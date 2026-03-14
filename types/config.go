@@ -76,7 +76,7 @@ type Cfg struct {
 func NewConfig(ctx context.Context, path string) (*Cfg, error) {
 	cfg := &Cfg{
 		path: path,
-		FW:   make(chan bool),
+		FW:   make(chan bool, 1),
 	}
 
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
@@ -219,6 +219,9 @@ func (c *Cfg) Validate() error {
 			host.FailureThreshold = c.FailureThreshold
 		}
 
+		if host.Headers == nil {
+			host.Headers = make(map[string]string)
+		}
 		for key, value := range c.Headers {
 			if _, ok := host.Headers[key]; !ok {
 				host.Headers[key] = value

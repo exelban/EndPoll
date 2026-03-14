@@ -417,3 +417,124 @@ func TestConfig_Reload(t *testing.T) {
 		require.Equal(t, 2, cfg.Hosts[2].Index)
 	})
 }
+
+func TestConfig_Validate_NilHostHeaders(t *testing.T) {
+	cfg := &Cfg{
+		Headers: map[string]string{
+			"Authorization": "Bearer token",
+		},
+		FileHosts: []*Host{
+			{
+				URL: "http://example.com",
+				// Headers is nil — should not panic
+			},
+		},
+	}
+
+	require.NoError(t, cfg.Validate())
+	require.NotNil(t, cfg.Hosts[0].Headers)
+	require.Equal(t, "Bearer token", cfg.Hosts[0].Headers["Authorization"])
+}
+
+func TestConfig_Validate_DeprecatedAlerts(t *testing.T) {
+	initMsg := true
+	cfg := &Cfg{
+		Alerts: &Notifications{
+			Slack: &Slack{
+				Channel: "test",
+				Token:   "test-token",
+			},
+			InitializationMessage: &initMsg,
+		},
+		FileHosts: []*Host{
+			{URL: "http://example.com"},
+		},
+	}
+
+	require.NoError(t, cfg.Validate())
+	require.NotNil(t, cfg.Notifications.Slack)
+	require.Equal(t, "test", cfg.Notifications.Slack.Channel)
+	require.Equal(t, "test-token", cfg.Notifications.Slack.Token)
+}
+
+func TestConfig_Validate_MaxConn(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		cfg := &Cfg{
+			FileHosts: []*Host{{URL: "test"}},
+		}
+		require.NoError(t, cfg.Validate())
+		require.Equal(t, 128, cfg.MaxConn)
+	})
+	t.Run("custom", func(t *testing.T) {
+		cfg := &Cfg{
+			MaxConn:   10,
+			FileHosts: []*Host{{URL: "test"}},
+		}
+		require.NoError(t, cfg.Validate())
+		require.Equal(t, 10, cfg.MaxConn)
+	})
+}
+
+func TestConfig_Validate_HostConditionsPartialOverride(t *testing.T) {
+	body := "ok"
+	cfg := &Cfg{
+		Conditions: &Success{
+			Code: []int{200, 201},
+		},
+		FileHosts: []*Host{
+			{
+				URL: "test",
+				Conditions: &Success{
+					Body: &body,
+					// Code is empty — should inherit from global
+				},
+			},
+		},
+	}
+	require.NoError(t, cfg.Validate())
+	require.Equal(t, []int{200, 201}, cfg.Hosts[0].Conditions.Code)
+	require.Equal(t, &body, cfg.Hosts[0].Conditions.Body)
+}
+
+func TestConfig_Validate_HostPerHostOverrides(t *testing.T) {
+	globalInterval := 30 * time.Second
+	hostInterval := 10 * time.Second
+	hostTimeout := 5 * time.Second
+
+	cfg := &Cfg{
+		Interval: globalInterval,
+		FileHosts: []*Host{
+			{
+				URL:              "test",
+				Interval:         &hostInterval,
+				TimeoutInterval:  &hostTimeout,
+				SuccessThreshold: 5,
+				FailureThreshold: 10,
+			},
+		},
+	}
+	require.NoError(t, cfg.Validate())
+	require.Equal(t, hostInterval, *cfg.Hosts[0].Interval)
+	require.Equal(t, hostTimeout, *cfg.Hosts[0].TimeoutInterval)
+	require.Equal(t, 5, cfg.Hosts[0].SuccessThreshold)
+	require.Equal(t, 10, cfg.Hosts[0].FailureThreshold)
+}
+
+func TestConfig_Validate_MultipleHosts(t *testing.T) {
+	cfg := &Cfg{
+		FileHosts: []*Host{
+			{URL: "http://a.com"},
+			{URL: "http://b.com"},
+			{URL: "http://c.com"},
+		},
+	}
+	require.NoError(t, cfg.Validate())
+	require.Len(t, cfg.Hosts, 3)
+
+	for i, h := range cfg.Hosts {
+		require.Equal(t, i, h.Index)
+		require.NotEmpty(t, h.ID)
+		require.NotNil(t, h.Interval)
+		require.NotNil(t, h.TimeoutInterval)
+	}
+}

@@ -7,9 +7,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/exelban/JAM/pkg/html"
-	"github.com/exelban/JAM/pkg/monitor"
-	"github.com/exelban/JAM/types"
+	"github.com/exelban/EndPoll/pkg/html"
+	"github.com/exelban/EndPoll/pkg/monitor"
+	"github.com/exelban/EndPoll/types"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/css"
 	mhtml "github.com/tdewolff/minify/v2/html"
@@ -36,7 +36,7 @@ func (s *Rest) Router() *http.ServeMux {
 	s.minify.AddFunc("image/svg+xml", svg.Minify)
 	s.minify.AddFunc("application/javascript", js.Minify)
 
-	router := NewRouter(Recoverer, CORS, Ping(), Info("JAM", s.Version))
+	router := NewRouter(Recoverer, CORS, Ping(), Info("EndPoll", s.Version))
 
 	router.HandleFunc("GET /", s.public)
 	router.HandleFunc("GET /{id}", s.public)
@@ -59,7 +59,7 @@ func (s *Rest) public(w http.ResponseWriter, r *http.Request) {
 		stats, err = s.Monitor.StatsByID(ctx, id, false)
 	}
 	if err != nil {
-		if errors.Is(types.ErrHostNotFound, err) {
+		if errors.Is(err, types.ErrHostNotFound) {
 			s.notFound(w, r)
 			return
 		}
@@ -133,7 +133,7 @@ func (s *Rest) responseTime(w http.ResponseWriter, r *http.Request) {
 
 	x, y, err := s.Monitor.ResponseTime(ctx, id)
 	if err != nil {
-		if errors.Is(types.ErrHostNotFound, err) {
+		if errors.Is(err, types.ErrHostNotFound) {
 			s.notFound(w, r)
 			return
 		}
