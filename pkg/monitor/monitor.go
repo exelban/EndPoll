@@ -36,7 +36,7 @@ func (m *Monitor) Run(cfg *types.Cfg) error {
 		m.cancel()
 	}
 	m.ctx, m.cancel = context.WithCancel(context.Background())
-	m.dialer = dialer.New(cfg.MaxConn)
+	m.dialer = dialer.New(128)
 	n, err := notify.New(m.ctx, cfg)
 	if err != nil {
 		m.mu.Unlock()

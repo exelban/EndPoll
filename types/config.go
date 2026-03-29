@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 type Slack struct {
@@ -42,14 +42,18 @@ type Notifications struct {
 	ShutdownMessage       bool  `json:"shutdownMessage" yaml:"shutdownMessage"`
 }
 
+type BasicAuth struct {
+	Username string `json:"username" yaml:"username"`
+	Password string `json:"password" yaml:"password"`
+}
+
 type UI struct {
-	Title   string `json:"title" yaml:"title"`     // web page title
-	HideURL bool   `json:"hideURL" yaml:"hideURL"` // allows to hide URL of the host in the UI
+	Title     string     `json:"title" yaml:"title"`         // web page title
+	HideURL   bool       `json:"hideURL" yaml:"hideURL"`     // allows to hide URL of the host in the UI
+	BasicAuth *BasicAuth `json:"basicAuth" yaml:"basicAuth"` // enables basic authentication for the web UI
 }
 
 type Cfg struct {
-	MaxConn int `json:"maxConn" yaml:"maxConn,omitempty"`
-
 	Interval     time.Duration  `json:"interval,omitempty" yaml:"interval,omitempty"`
 	Timeout      time.Duration  `json:"timeout,omitempty" yaml:"timeout,omitempty"`
 	InitialDelay *time.Duration `json:"initialDelay,omitempty" yaml:"initialDelay,omitempty"`
@@ -99,8 +103,12 @@ func NewConfig(ctx context.Context, path string) (*Cfg, error) {
 					continue
 				}
 				if fi.ModTime() != modTimestamp {
-					log.Printf("[DEBUG] config changed: %s -> %s",
-						modTimestamp.Format(time.RFC3339Nano), fi.ModTime().Format(time.RFC3339Nano))
+					if modTimestamp.IsZero() {
+						log.Print("[DEBUG] loading config")
+					} else {
+						log.Printf("[DEBUG] config changed: %s -> %s",
+							modTimestamp.Format(time.RFC3339Nano), fi.ModTime().Format(time.RFC3339Nano))
+					}
 					cfg.FW <- true
 					modTimestamp = fi.ModTime()
 				}
@@ -150,9 +158,6 @@ func (c *Cfg) Parse() error {
 
 // Validate - trying to guess if host is API or Server, also set default timeout and retry values
 func (c *Cfg) Validate() error {
-	if c.MaxConn == 0 {
-		c.MaxConn = 128
-	}
 	if c.Interval == time.Duration(0) {
 		c.Interval = 30 * time.Second
 	}

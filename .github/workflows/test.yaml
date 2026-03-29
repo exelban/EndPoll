@@ -18,5 +18,11 @@ jobs:
         with:
           go-version: '1.26'
 
+      - name: Install moq
+        run: go install github.com/matryer/moq@latest
+
+      - name: Generate mocks
+        run: go generate ./...
+
       - name: Run tests
         run: go test ./...

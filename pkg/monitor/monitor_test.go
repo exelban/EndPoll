@@ -56,7 +56,6 @@ func TestMonitor_Run(t *testing.T) {
 				},
 			},
 		},
-		MaxConn: 3,
 	}
 	for _, h := range hosts.Hosts {
 		h.ID = h.GenerateID()

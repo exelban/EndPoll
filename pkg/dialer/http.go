@@ -14,7 +14,7 @@ import (
 	"github.com/exelban/EndPoll/types"
 )
 
-// httpCall makes a HTTP request to the host
+// httpCall makes an HTTP request to the host
 func (d *Dialer) httpCall(ctx context.Context, h *types.Host) (response types.HttpResponse) {
 	method := h.Method
 	if method == "" {
@@ -92,6 +92,22 @@ func (d *Dialer) httpCall(ctx context.Context, h *types.Host) (response types.Ht
 
 	if tlsState != nil && len(tlsState.PeerCertificates) > 0 {
 		response.SSLCertExpiry = &tlsState.PeerCertificates[0].NotAfter
+		issuer := tlsState.PeerCertificates[0].Issuer
+		if len(issuer.Organization) > 0 {
+			response.SSLIssuer = issuer.Organization[0]
+		} else {
+			response.SSLIssuer = issuer.CommonName
+		}
+		switch tlsState.Version {
+		case tls.VersionTLS10:
+			response.TLSVersion = "TLS 1.0"
+		case tls.VersionTLS11:
+			response.TLSVersion = "TLS 1.1"
+		case tls.VersionTLS12:
+			response.TLSVersion = "TLS 1.2"
+		case tls.VersionTLS13:
+			response.TLSVersion = "TLS 1.3"
+		}
 	}
 
 	b, err := io.ReadAll(resp.Body)

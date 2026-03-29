@@ -457,24 +457,6 @@ func TestConfig_Validate_DeprecatedAlerts(t *testing.T) {
 	require.Equal(t, "test-token", cfg.Notifications.Slack.Token)
 }
 
-func TestConfig_Validate_MaxConn(t *testing.T) {
-	t.Run("default", func(t *testing.T) {
-		cfg := &Cfg{
-			FileHosts: []*Host{{URL: "test"}},
-		}
-		require.NoError(t, cfg.Validate())
-		require.Equal(t, 128, cfg.MaxConn)
-	})
-	t.Run("custom", func(t *testing.T) {
-		cfg := &Cfg{
-			MaxConn:   10,
-			FileHosts: []*Host{{URL: "test"}},
-		}
-		require.NoError(t, cfg.Validate())
-		require.Equal(t, 10, cfg.MaxConn)
-	})
-}
-
 func TestConfig_Validate_HostConditionsPartialOverride(t *testing.T) {
 	body := "ok"
 	cfg := &Cfg{

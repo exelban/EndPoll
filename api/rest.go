@@ -36,7 +36,7 @@ func (s *Rest) Router() *http.ServeMux {
 	s.minify.AddFunc("image/svg+xml", svg.Minify)
 	s.minify.AddFunc("application/javascript", js.Minify)
 
-	router := NewRouter(Recoverer, CORS, Ping(), Info("EndPoll", s.Version))
+	router := NewRouter(Recoverer, CORS, Ping(), Auth(s.UI.BasicAuth), Info("EndPoll", s.Version))
 
 	router.HandleFunc("GET /", s.public)
 	router.HandleFunc("GET /{id}", s.public)

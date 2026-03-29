@@ -64,9 +64,28 @@ func (m *Monitor) Stats(ctx context.Context) (*types.Stats, error) {
 		start := now.Add(-time.Hour * 24 * 90)
 		for i := 0; i < 91; i++ {
 			ts := start.Add(time.Hour * 24 * time.Duration(i))
+			status := generateGroupStatus(&g.Hosts, &i)
+
+			upCount := 0
+			downCount := 0
+			for _, h := range g.Hosts {
+				if i < len(h.Chart.Points) {
+					switch h.Chart.Points[i].Status {
+					case types.UP:
+						upCount++
+					case types.DOWN, types.DEGRADED:
+						downCount++
+					}
+				}
+			}
+
+			tooltip := ts.Format("2006-01-02") + "\nStatus: " + string(status)
+			tooltip += fmt.Sprintf("\nHosts: %d/%d up", upCount, len(g.Hosts))
+
 			g.Chart.Points = append(g.Chart.Points, &types.Point{
 				Timestamp: ts.Format("2006-01-02"),
-				Status:    generateGroupStatus(&g.Hosts, &i),
+				Status:    status,
+				Tooltip:   &tooltip,
 				TS:        ts,
 			})
 		}
@@ -261,11 +280,24 @@ func genChart(history []*types.HttpResponse, interval time.Duration, dayReport b
 		if r.IsAggregated {
 			pointFormat = "2006-01-02"
 		}
-		points[space+i] = &types.Point{
+		p := &types.Point{
 			Timestamp: r.Timestamp.Format(pointFormat),
 			Status:    r.StatusType,
 			TS:        r.Timestamp,
 		}
+
+		tooltip := r.Timestamp.Format(pointFormat) + "\nStatus: " + string(r.StatusType)
+		if r.IsAggregated {
+			if r.Uptime > 0 {
+				tooltip += fmt.Sprintf("\nUptime: %.2f%%", r.Uptime*100)
+			}
+		}
+		if r.Time > 0 {
+			tooltip += "\nResponse time: " + r.Time.Truncate(time.Millisecond).String()
+		}
+		p.Tooltip = &tooltip
+
+		points[space+i] = p
 		responseTime += r.Time
 	}
 
@@ -358,7 +390,7 @@ func getDetails(responses []*types.HttpResponse, incidents []*types.Incident) *t
 	if uptime30Days == math.Trunc(uptime30Days) {
 		d.Uptime = fmt.Sprintf("%.0f", uptime30Days)
 	} else {
-		d.Uptime = fmt.Sprintf("%.1f", uptime30Days)
+		d.Uptime = fmt.Sprintf("%.2f", uptime30Days)
 	}
 	d.ResponseTime = formatDuration(responseTime30Days)
 
@@ -376,10 +408,13 @@ func getDetails(responses []*types.HttpResponse, incidents []*types.Incident) *t
 	}
 
 	if len(responses) > 0 && responses[len(responses)-1].SSLCertExpiry != nil {
-		expireAt := responses[len(responses)-1].SSLCertExpiry
+		latest := responses[len(responses)-1]
+		expireAt := latest.SSLCertExpiry
 		d.SSL = &types.SSLDetails{
 			ExpireInDays: int(expireAt.Sub(time.Now()).Hours() / 24),
 			ExpireTS:     expireAt.Format("January 2, 2006"),
+			Issuer:       latest.SSLIssuer,
+			TLSVersion:   latest.TLSVersion,
 		}
 	}
 

@@ -11,21 +11,52 @@
   {{ template "style" . }}
 
   <style>
-    .container {
+    main.container {
       display: flex;
       justify-content: center;
       align-items: center;
     }
-    .panel {
-      margin-top: -10%;
+    .error-page {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 48px 24px !important;
+      margin-top: -5%;
+      gap: 6px !important;
+    }
+    .error-page .code {
+      font-size: 56px;
+      font-weight: 700;
+      color: var(--color-section-bg);
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .error-page p {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--color-fg);
+      overflow: visible;
+      white-space: normal;
+      margin-bottom: 4px;
+    }
+    .error-page a {
+      font-size: 14px;
+      text-decoration: none;
+    }
+    .error-page a:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
 <body>
 
 <main class="container">
-  <section class="panel">
-    Page you are looking for is not found. <a href="/"><small>Go back to home</small></a>
+  <section class="panel error-page">
+    <div class="code">404</div>
+    <p>Page not found</p>
+    <a href="/">Back to status page</a>
   </section>
 </main>
 

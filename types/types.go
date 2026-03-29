@@ -48,7 +48,9 @@ type HttpResponse struct {
 	TLSHandshake  time.Duration `json:"TLSHandshake,omitempty"`
 	Connect       time.Duration `json:"connect,omitempty"`
 	TTFB          time.Duration `json:"TTFB,omitempty"`
-	SSLCertExpiry *time.Time    `json:"SSLExpiry,omitempty"`
+	SSLCertExpiry *time.Time `json:"SSLExpiry,omitempty"`
+	SSLIssuer     string     `json:"SSLIssuer,omitempty"`
+	TLSVersion    string     `json:"TLSVersion,omitempty"`
 
 	IsAggregated bool    `json:"isAggregated"`
 	Uptime       float64 `json:"uptime,omitempty"` // aggregation uptime

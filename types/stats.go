@@ -21,6 +21,8 @@ type Chart struct {
 type SSLDetails struct {
 	ExpireInDays int
 	ExpireTS     string
+	Issuer       string
+	TLSVersion   string
 }
 type LastOutageDetails struct {
 	Duration string

@@ -147,7 +147,12 @@ headers:
 ui:
   title: "My Status Page"  # browser tab title
   hideURL: false            # hide host URLs from the dashboard
+  basicAuth:                # protect the dashboard with basic authentication (optional)
+    username: "admin"
+    password: "secret"
 ```
+
+When `basicAuth` is set, all pages require credentials. The `/ping` health check endpoint remains unauthenticated.
 
 #### Notifications
 

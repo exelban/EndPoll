@@ -12,16 +12,3 @@ hosts:
   - name: Google
     url: https://www.google.com
     description: Google search engine
-
-  - url: https://api.serhiy.io/v1/stats/ping
-    name: ping
-    group: Stats
-    hidden: true
-  - url: https://api.serhiy.io/v1/stats/release/latest
-    name: Last release API
-    group: Stats
-    hidden: true
-  - url: https://api.serhiy.io/v1/stats/ip
-    name: IP address API
-    group: Stats
-    hidden: true
