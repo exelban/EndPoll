@@ -8,7 +8,7 @@ EndPoll is a lightweight, self-hosted status page and monitoring tool. It period
 
 ## Features
 
-- **Multi-protocol monitoring** — HTTP/HTTPS, MongoDB, and ICMP (ping)
+- **Multiprotocol monitoring** — HTTP/HTTPS, MongoDB, and ICMP (ping)
 - **90-day history** with automatic daily aggregation
 - **Incident tracking** — records downtime events with duration and status codes
 - **Host grouping** — organize hosts into named groups with optional hidden members
@@ -153,6 +153,20 @@ ui:
 ```
 
 When `basicAuth` is set, all pages require credentials. The `/ping` health check endpoint remains unauthenticated.
+
+#### Connectivity check
+
+For self-hosted setups (e.g. running at home), a drop in your own internet connection would otherwise make every external host appear DOWN at once. Before counting a failed check as an outage, EndPoll verifies that the monitor itself is online by opening a TCP connection to well-known public endpoints. If the monitor has no connectivity, the failed check is skipped: the host keeps its last known status, no failure is counted and no alert is sent. Normal checking resumes automatically once connectivity is restored.
+
+```yaml
+connectivity:
+  disabled: false                       # disable the connectivity check (enabled by default)
+  targets:                              # endpoints probed over TCP (default: 1.1.1.1:53, 8.8.8.8:53)
+    - "1.1.1.1:53"
+    - "8.8.8.8:53"
+  interval: 5s                          # how long a connectivity result is cached (default: 5s)
+  timeout: 2s                           # timeout for a single probe (default: 2s)
+```
 
 #### Notifications
 

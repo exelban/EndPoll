@@ -53,6 +53,16 @@ type UI struct {
 	BasicAuth *BasicAuth `json:"basicAuth" yaml:"basicAuth"` // enables basic authentication for the web UI
 }
 
+// Connectivity - configures the self connectivity check. When the monitor
+// loses its own internet connection, failed host checks are skipped instead
+// of being reported as DOWN, avoiding false positives (e.g. home internet outage).
+type Connectivity struct {
+	Disabled bool          `json:"disabled" yaml:"disabled"` // disables the connectivity check (enabled by default)
+	Targets  []string      `json:"targets" yaml:"targets"`   // host:port endpoints to probe over TCP
+	Interval time.Duration `json:"interval" yaml:"interval"` // how long a connectivity result is cached
+	Timeout  time.Duration `json:"timeout" yaml:"timeout"`   // timeout for a single connectivity probe
+}
+
 type Cfg struct {
 	Interval     time.Duration  `json:"interval,omitempty" yaml:"interval,omitempty"`
 	Timeout      time.Duration  `json:"timeout,omitempty" yaml:"timeout,omitempty"`
@@ -65,6 +75,7 @@ type Cfg struct {
 	Headers    map[string]string `json:"headers" yaml:"headers,omitempty"`
 
 	UI            UI            `json:"ui" yaml:"ui"`
+	Connectivity  *Connectivity `json:"connectivity" yaml:"connectivity,omitempty"`
 	Notifications Notifications `json:"notifications" yaml:"notifications,omitempty"`
 	FileHosts     []*Host       `json:"hosts" yaml:"hosts"`
 	Hosts         []*Host       `json:"-" yaml:"-"`

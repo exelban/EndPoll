@@ -158,6 +158,8 @@
           justify-content: center;
           align-items: center;
           gap: 6px;
+          min-width: 0;
+          overflow: hidden;
           p, a {
             font-size: 14px;
             font-weight: 500;
@@ -166,6 +168,9 @@
               font-weight: 300;
               text-transform: none;
               color: var(--color-subtitle);
+              @media only screen and (max-width: 600px) {
+                display: none;
+              }
             }
           }
           a {

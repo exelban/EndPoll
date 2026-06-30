@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/exelban/EndPoll/pkg/connectivity"
 	"github.com/exelban/EndPoll/pkg/dialer"
 	"github.com/exelban/EndPoll/pkg/notify"
 	"github.com/exelban/EndPoll/store"
@@ -14,8 +15,9 @@ import (
 type Monitor struct {
 	Store store.Interface
 
-	dialer *dialer.Dialer
-	notify *notify.Notify
+	dialer       *dialer.Dialer
+	notify       *notify.Notify
+	connectivity *connectivity.Checker
 
 	watchers map[string]*watcher
 
@@ -37,6 +39,7 @@ func (m *Monitor) Run(cfg *types.Cfg) error {
 	}
 	m.ctx, m.cancel = context.WithCancel(context.Background())
 	m.dialer = dialer.New(128)
+	m.connectivity = connectivity.New(cfg.Connectivity)
 	n, err := notify.New(m.ctx, cfg)
 	if err != nil {
 		m.mu.Unlock()
@@ -56,6 +59,7 @@ func (m *Monitor) Run(cfg *types.Cfg) error {
 			}
 		} else {
 			w.cancel()
+			w.connectivity = m.connectivity
 			go w.run(m.ctx)
 		}
 	}
@@ -82,10 +86,11 @@ func (m *Monitor) Run(cfg *types.Cfg) error {
 // add - create a watcher for host
 func (m *Monitor) add(host *types.Host) error {
 	w := &watcher{
-		dialer: m.dialer,
-		notify: m.notify,
-		store:  m.Store,
-		host:   host,
+		dialer:       m.dialer,
+		notify:       m.notify,
+		connectivity: m.connectivity,
+		store:        m.Store,
+		host:         host,
 	}
 	go w.run(m.ctx)
 

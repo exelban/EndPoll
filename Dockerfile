@@ -14,6 +14,7 @@ RUN if [ -z "$VERSION" ]; then  \
     go build -ldflags "-X main.version=$VERSION" -o bin/main
 
 FROM exelban/baseimage:alpine-latest
+LABEL org.opencontainers.image.source="https://github.com/exelban/EndPoll"
 EXPOSE 8822
 WORKDIR /app
 COPY --from=build-app /app/bin/main /app/main

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/exelban/EndPoll/pkg/connectivity"
 	"github.com/exelban/EndPoll/pkg/dialer"
 	"github.com/exelban/EndPoll/pkg/notify"
 	"github.com/exelban/EndPoll/store"
@@ -14,10 +15,11 @@ import (
 )
 
 type watcher struct {
-	dialer *dialer.Dialer
-	notify *notify.Notify
-	store  store.Interface
-	host   *types.Host
+	dialer       *dialer.Dialer
+	notify       *notify.Notify
+	connectivity *connectivity.Checker
+	store        store.Interface
+	host         *types.Host
 
 	status    types.StatusType
 	lastCheck time.Time
@@ -76,6 +78,16 @@ func (w *watcher) check() {
 
 	w.mu.Lock()
 	resp.Status = w.host.Status(resp.Code, resp.Bytes)
+
+	// if the check failed but the monitor itself has no connectivity, skip the
+	// evaluation entirely: don't count it as a failure, change status or alert.
+	// This prevents false-positive DOWN statuses during a local internet outage.
+	if !resp.Status && w.connectivity != nil && !w.connectivity.Online() {
+		w.mu.Unlock()
+		log.Printf("[WARN] %s: check failed but monitor has no connectivity, skipping", w.host.String())
+		return
+	}
+
 	w.lastCheck = time.Now()
 	w.validate(&resp)
 	resp.StatusType = w.status
