@@ -61,7 +61,7 @@ func TestMonitor_Run(t *testing.T) {
 		h.ID = h.GenerateID()
 	}
 
-	require.NoError(t, m.Run(hosts))
+	require.NoError(t, m.Run(context.Background(), hosts))
 	time.Sleep(time.Millisecond * 10)
 	require.Len(t, m.watchers, 2)
 
@@ -77,7 +77,9 @@ func TestMonitor_Run(t *testing.T) {
 				}
 			}
 			require.NotNil(t, watch)
+			watch.mu.RLock()
 			require.Equal(t, types.UP, watch.status)
+			watch.mu.RUnlock()
 			m.mu.RUnlock()
 		})
 		t.Run("must does down", func(t *testing.T) {
@@ -92,7 +94,9 @@ func TestMonitor_Run(t *testing.T) {
 				}
 			}
 			require.NotNil(t, watch)
+			watch.mu.RLock()
 			require.Equal(t, types.DOWN, watch.status)
+			watch.mu.RUnlock()
 			m.mu.RUnlock()
 		})
 		t.Run("must does down", func(t *testing.T) {
@@ -107,7 +111,9 @@ func TestMonitor_Run(t *testing.T) {
 				}
 			}
 			require.NotNil(t, watch)
+			watch.mu.RLock()
 			require.Equal(t, types.DOWN, watch.status)
+			watch.mu.RUnlock()
 			m.mu.RUnlock()
 			//require.Equal(t, types.DOWN, m.Status()["host-0"])
 		})
@@ -128,7 +134,7 @@ func TestMonitor_Run(t *testing.T) {
 				}
 				newHost.ID = newHost.GenerateID()
 				hosts.Hosts = append(hosts.Hosts, newHost)
-				require.NoError(t, m.Run(hosts))
+				require.NoError(t, m.Run(context.Background(), hosts))
 				time.Sleep(time.Millisecond * 10)
 				require.Len(t, m.watchers, initLen)
 			})
@@ -146,7 +152,7 @@ func TestMonitor_Run(t *testing.T) {
 				}
 				newHost.ID = newHost.GenerateID()
 				hosts.Hosts = append(hosts.Hosts, newHost)
-				require.NoError(t, m.Run(hosts))
+				require.NoError(t, m.Run(context.Background(), hosts))
 				time.Sleep(time.Millisecond * 10)
 				require.Len(t, m.watchers, initLen)
 			})
@@ -164,7 +170,7 @@ func TestMonitor_Run(t *testing.T) {
 				}
 				newHost.ID = newHost.GenerateID()
 				hosts.Hosts = append(hosts.Hosts, newHost)
-				require.NoError(t, m.Run(hosts))
+				require.NoError(t, m.Run(context.Background(), hosts))
 				time.Sleep(time.Millisecond * 10)
 				require.Len(t, m.watchers, initLen)
 			})
@@ -183,7 +189,7 @@ func TestMonitor_Run(t *testing.T) {
 				}
 				newHost.ID = newHost.GenerateID()
 				hosts.Hosts = append(hosts.Hosts, newHost)
-				require.NoError(t, m.Run(hosts))
+				require.NoError(t, m.Run(context.Background(), hosts))
 				time.Sleep(time.Millisecond * 10)
 				require.Len(t, m.watchers, initLen+1)
 			})
@@ -201,7 +207,7 @@ func TestMonitor_Run(t *testing.T) {
 				}
 				newHost.ID = newHost.GenerateID()
 				hosts.Hosts = append(hosts.Hosts, newHost)
-				require.NoError(t, m.Run(hosts))
+				require.NoError(t, m.Run(context.Background(), hosts))
 				time.Sleep(time.Millisecond * 10)
 				require.Len(t, m.watchers, initLen+1)
 			})
@@ -220,7 +226,7 @@ func TestMonitor_Run(t *testing.T) {
 				}
 				newHost.ID = newHost.GenerateID()
 				hosts.Hosts = append(hosts.Hosts, newHost)
-				require.NoError(t, m.Run(hosts))
+				require.NoError(t, m.Run(context.Background(), hosts))
 				time.Sleep(time.Millisecond * 10)
 				require.Len(t, m.watchers, initLen+1)
 			})
@@ -239,21 +245,21 @@ func TestMonitor_Run(t *testing.T) {
 				}
 				newHost.ID = newHost.GenerateID()
 				hosts.Hosts = append(hosts.Hosts, newHost)
-				require.NoError(t, m.Run(hosts))
+				require.NoError(t, m.Run(context.Background(), hosts))
 				time.Sleep(time.Millisecond * 10)
 				require.Len(t, m.watchers, initLen+1)
 			})
 		})
 		t.Run("update", func(t *testing.T) {
 			hosts.Hosts[0].Group = &groupName
-			require.NoError(t, m.Run(hosts))
+			require.NoError(t, m.Run(context.Background(), hosts))
 			time.Sleep(time.Millisecond * 10)
 		})
 	})
 
 	t.Run("remove host", func(t *testing.T) {
 		hosts.Hosts = hosts.Hosts[:1]
-		require.NoError(t, m.Run(hosts))
+		require.NoError(t, m.Run(context.Background(), hosts))
 		require.Len(t, m.watchers, 1)
 	})
 }

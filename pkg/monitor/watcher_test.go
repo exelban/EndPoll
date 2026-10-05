@@ -343,8 +343,10 @@ func TestWatcher_run_InitialDelay(t *testing.T) {
 
 	start := time.Now()
 	go w.run(ctx)
-	time.Sleep(50 * time.Millisecond)                // well before delay
+	time.Sleep(50 * time.Millisecond) // well before delay
+	w.mu.RLock()
 	require.Equal(t, types.StatusType(""), w.status) // not checked yet
+	w.mu.RUnlock()
 
 	time.Sleep(250 * time.Millisecond) // after delay + first check
 	require.True(t, time.Since(start) >= delay)

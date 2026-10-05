@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -15,6 +16,18 @@ import (
 
 // Stats - returns the stats of all hosts grouped by groups
 func (m *Monitor) Stats(ctx context.Context) (*types.Stats, error) {
+	if v, ok := m.cache.get("stats"); ok {
+		return v.(*types.Stats), nil
+	}
+	s, err := m.stats(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m.cache.set("stats", s, m.CacheTTL)
+	return s, nil
+}
+
+func (m *Monitor) stats(ctx context.Context) (*types.Stats, error) {
 	s := &types.Stats{
 		IsHost: false,
 		Status: types.Unknown,
@@ -23,25 +36,31 @@ func (m *Monitor) Stats(ctx context.Context) (*types.Stats, error) {
 	groups := make(map[string][]*types.Stats)
 	hiddenHosts := make([]string, 0)
 	m.mu.RLock()
+	watchers := make([]*watcher, 0, len(m.watchers))
 	for _, w := range m.watchers {
-		stats, err := m.StatsByID(ctx, w.host.ID, true)
+		watchers = append(watchers, w)
+	}
+	m.mu.RUnlock()
+
+	for _, w := range watchers {
+		host, _ := w.snapshot()
+		stats, err := m.StatsByID(ctx, host.ID, true)
 		if err != nil {
+			if errors.Is(err, types.ErrHostNotFound) {
+				continue // removed between the two lookups
+			}
 			return nil, err
 		}
-		host := stats.Hosts[0]
-		if w.host.Group == nil {
-			s.Hosts = append(s.Hosts, host)
+		h := stats.Hosts[0]
+		if host.Group == nil {
+			s.Hosts = append(s.Hosts, h)
 		} else {
-			if _, ok := groups[*w.host.Group]; !ok {
-				groups[*w.host.Group] = []*types.Stats{}
-			}
-			groups[*w.host.Group] = append(groups[*w.host.Group], stats)
-			if w.host.Hidden {
-				hiddenHosts = append(hiddenHosts, w.host.ID)
+			groups[*host.Group] = append(groups[*host.Group], stats)
+			if host.Hidden {
+				hiddenHosts = append(hiddenHosts, host.ID)
 			}
 		}
 	}
-	m.mu.RUnlock()
 
 	for group, stats := range groups {
 		g := types.Stat{
@@ -124,14 +143,27 @@ func (m *Monitor) Stats(ctx context.Context) (*types.Stats, error) {
 
 // StatsByID - returns the stats of a host by id
 func (m *Monitor) StatsByID(ctx context.Context, id string, dayReport bool) (*types.Stats, error) {
+	key := fmt.Sprintf("stats:%s:%t", id, dayReport)
+	if v, ok := m.cache.get(key); ok {
+		return v.(*types.Stats), nil
+	}
+	s, err := m.statsByID(ctx, id, dayReport)
+	if err != nil {
+		return nil, err
+	}
+	m.cache.set(key, s, m.CacheTTL)
+	return s, nil
+}
+
+func (m *Monitor) statsByID(ctx context.Context, id string, dayReport bool) (*types.Stats, error) {
 	m.mu.RLock()
 	w, ok := m.watchers[id]
+	m.mu.RUnlock()
 	if !ok {
-		m.mu.RUnlock()
 		return nil, types.ErrHostNotFound
 	}
-	step := *w.host.Interval
-	m.mu.RUnlock()
+	host, status := w.snapshot()
+	step := *host.Interval
 
 	history, err := m.Store.FindResponses(ctx, id)
 	if err != nil {
@@ -154,36 +186,57 @@ func (m *Monitor) StatsByID(ctx context.Context, id string, dayReport bool) (*ty
 	}
 	chart, uptime, responseTime := genChart(history, step, dayReport)
 
-	w.mu.RLock()
-	status := w.status
-	if w.status == "" {
-		status = types.Unknown
-	}
 	s := &types.Stats{
 		IsHost: true,
 		Status: status,
 		Hosts: []types.Stat{
 			{
-				ID:           w.host.ID,
-				Name:         w.host.Name,
-				Description:  w.host.Description,
-				Host:         w.host.SecureURL(),
+				ID:           host.ID,
+				Name:         host.Name,
+				Description:  host.Description,
+				Host:         host.SecureURL(),
 				Status:       status,
 				Uptime:       uptime,
 				ResponseTime: responseTime,
 				Chart:        chart,
 				Details:      details,
-				Index:        w.host.Index,
+				Index:        host.Index,
 			},
 		},
 		Incidents: incidents,
 	}
-	w.mu.RUnlock()
 
 	return s, nil
 }
 
+type responseTimeSeries struct {
+	keys   []time.Time
+	values []float64
+}
+
+// ResponseTime - returns the average response time per day
 func (m *Monitor) ResponseTime(ctx context.Context, id string) ([]time.Time, []float64, error) {
+	m.mu.RLock()
+	_, ok := m.watchers[id]
+	m.mu.RUnlock()
+	if !ok {
+		return nil, nil, types.ErrHostNotFound
+	}
+
+	key := "rt:" + id
+	if v, ok := m.cache.get(key); ok {
+		s := v.(responseTimeSeries)
+		return s.keys, s.values, nil
+	}
+	keys, values, err := m.responseTime(ctx, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	m.cache.set(key, responseTimeSeries{keys: keys, values: values}, m.CacheTTL)
+	return keys, values, nil
+}
+
+func (m *Monitor) responseTime(ctx context.Context, id string) ([]time.Time, []float64, error) {
 	history, err := m.Store.FindResponses(ctx, id)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get history: %w", err)
@@ -316,10 +369,15 @@ func genChart(history []*types.HttpResponse, interval time.Duration, dayReport b
 		return points[i].TS.Before(points[j].TS)
 	})
 
+	avg := time.Duration(0)
+	if len(history) > 0 {
+		avg = responseTime / time.Duration(len(history))
+	}
+
 	return types.Chart{
 		Points:    points,
 		Intervals: genIntervals(points),
-	}, uptime, (responseTime / time.Duration(len(points))).Truncate(time.Millisecond).String()
+	}, uptime, avg.Truncate(time.Millisecond).String()
 }
 func genIntervals(points []*types.Point) []string {
 	if len(points) < 61 {
@@ -366,26 +424,44 @@ func genIntervals(points []*types.Point) []string {
 func getDetails(responses []*types.HttpResponse, incidents []*types.Incident) *types.Details {
 	d := &types.Details{}
 
-	last30DaysUp := 0
-	last30DaysCount := 0
-	uptime30Days := 0.0
-	responseTime30Days := time.Duration(0)
+	// aggregated days represent many checks: they are weighted by their count,
+	// otherwise the (raw) checks of the current day would dominate the result.
+	var up, count float64
+	var responseTime30Days time.Duration
+	var responseTimeCount int64
+	since := time.Now().Add(-time.Hour * 24 * 30)
 
 	for _, r := range responses {
-		if r.Timestamp.After(time.Now().Add(-time.Hour * 24 * 30)) {
-			last30DaysCount++
-			if r.StatusType != types.DOWN {
-				last30DaysUp++
-			}
-			responseTime30Days += r.Time
+		if !r.Timestamp.After(since) {
+			continue
 		}
+		if r.IsAggregated {
+			if r.Count <= 0 {
+				continue
+			}
+			count += float64(r.Count)
+			up += r.Uptime * float64(r.Count)
+			responseTime30Days += r.Time * time.Duration(r.Count)
+			responseTimeCount += int64(r.Count)
+			continue
+		}
+		if r.StatusType == types.Unknown || r.StatusType == "" {
+			continue
+		}
+		count++
+		if r.StatusType == types.UP {
+			up++
+		}
+		responseTime30Days += r.Time
+		responseTimeCount++
 	}
 
-	if last30DaysCount > 0 {
-		uptime30Days = float64(last30DaysUp) * 100 / float64(last30DaysCount)
+	uptime30Days := 0.0
+	if count > 0 {
+		uptime30Days = up * 100 / count
 	}
-	if last30DaysUp != 0 {
-		responseTime30Days /= time.Duration(last30DaysUp)
+	if responseTimeCount > 0 {
+		responseTime30Days /= time.Duration(responseTimeCount)
 	}
 	if uptime30Days == math.Trunc(uptime30Days) {
 		d.Uptime = fmt.Sprintf("%.0f", uptime30Days)

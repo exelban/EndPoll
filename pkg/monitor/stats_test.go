@@ -353,7 +353,7 @@ func TestMonitor_StatsByID(t *testing.T) {
 			responses = append(responses, r)
 			responseTime += r.Time
 		}
-		responseTime = responseTime / time.Duration(90)
+		responseTime = responseTime / time.Duration(30)
 		require.NoError(t, store.Aggregate(ctx, m.Store))
 
 		s, err := m.StatsByID(ctx, "host", false)

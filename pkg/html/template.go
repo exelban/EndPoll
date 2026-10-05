@@ -24,7 +24,15 @@ func (t *Templates) Run(ctx context.Context) error {
 		return fmt.Errorf("load templates: %w", err)
 	}
 
+	if t.Public == nil || t.NotFound == nil {
+		return fmt.Errorf("templates not loaded")
+	}
 	if !t.Debug {
+		return nil
+	}
+
+	if _, err := os.Stat("templates"); err != nil {
+		log.Printf("[DEBUG] local templates directory not found, live reload disabled")
 		return nil
 	}
 
@@ -64,10 +72,6 @@ func (t *Templates) Run(ctx context.Context) error {
 				}
 			}
 		}(path, ch)
-	}
-
-	if t.Public == nil || t.NotFound == nil {
-		return fmt.Errorf("templates not loaded")
 	}
 
 	return nil

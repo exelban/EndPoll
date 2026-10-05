@@ -1,7 +1,6 @@
 package notify
 
 import (
-	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -12,12 +11,12 @@ import (
 
 func TestNew(t *testing.T) {
 	t.Run("no providers", func(t *testing.T) {
-		n, err := New(context.Background(), &types.Cfg{})
+		n, err := New(&types.Cfg{})
 		require.NoError(t, err)
 		require.Empty(t, n.clients)
 	})
 	t.Run("init slack error", func(t *testing.T) {
-		n, err := New(context.Background(), &types.Cfg{
+		n, err := New(&types.Cfg{
 			Notifications: types.Notifications{
 				Slack: &types.Slack{
 					Channel: "test",
@@ -35,7 +34,7 @@ func TestNotify_Set(t *testing.T) {
 		stringFunc: func() string {
 			return "mock"
 		},
-		sendFunc: func(subject, body string) error {
+		sendFunc: func(_, subject, body string) error {
 			if strings.Contains(body, "test_ok") {
 				return nil
 			}
@@ -59,7 +58,7 @@ func TestNotify_Send(t *testing.T) {
 			normalizeFunc: func(host *types.Host, status types.StatusType) (string, string) {
 				return "subject", "body"
 			},
-			sendFunc: func(subject, body string) error {
+			sendFunc: func(_, subject, body string) error {
 				callCount++
 				return nil
 			},
@@ -78,7 +77,7 @@ func TestNotify_Send(t *testing.T) {
 			normalizeFunc: func(host *types.Host, status types.StatusType) (string, string) {
 				return "s", "b"
 			},
-			sendFunc: func(subject, body string) error {
+			sendFunc: func(_, subject, body string) error {
 				slackCalls++
 				return nil
 			},
@@ -88,7 +87,7 @@ func TestNotify_Send(t *testing.T) {
 			normalizeFunc: func(host *types.Host, status types.StatusType) (string, string) {
 				return "s", "b"
 			},
-			sendFunc: func(subject, body string) error {
+			sendFunc: func(_, subject, body string) error {
 				telegramCalls++
 				return nil
 			},
@@ -110,7 +109,7 @@ func TestNotify_Send(t *testing.T) {
 			normalizeFunc: func(host *types.Host, status types.StatusType) (string, string) {
 				return "s", "b"
 			},
-			sendFunc: func(subject, body string) error {
+			sendFunc: func(_, subject, body string) error {
 				return errors.New("send failed")
 			},
 		}
@@ -129,7 +128,7 @@ func TestNotify_Send(t *testing.T) {
 func TestNotify_New_InitializationMessage(t *testing.T) {
 	t.Run("default sends init message", func(t *testing.T) {
 		cfg := &types.Cfg{}
-		n, err := New(context.Background(), cfg)
+		n, err := New(cfg)
 		require.NoError(t, err)
 		require.NotNil(t, n)
 		require.True(t, *cfg.Notifications.InitializationMessage)
@@ -142,7 +141,7 @@ func TestNotify_New_InitializationMessage(t *testing.T) {
 				InitializationMessage: &f,
 			},
 		}
-		n, err := New(context.Background(), cfg)
+		n, err := New(cfg)
 		require.NoError(t, err)
 		require.NotNil(t, n)
 	})
@@ -153,7 +152,7 @@ func TestNotify_Set_WithClients(t *testing.T) {
 		sent := false
 		m := &notifyMock{
 			stringFunc: func() string { return "slack" },
-			sendFunc: func(subject, body string) error {
+			sendFunc: func(_, subject, body string) error {
 				sent = true
 				require.Contains(t, body, "test-host")
 				return nil
@@ -168,7 +167,7 @@ func TestNotify_Set_WithClients(t *testing.T) {
 		sent := false
 		m := &notifyMock{
 			stringFunc: func() string { return "telegram" },
-			sendFunc: func(subject, body string) error {
+			sendFunc: func(_, subject, body string) error {
 				sent = true
 				return nil
 			},
@@ -182,7 +181,7 @@ func TestNotify_Set_WithClients(t *testing.T) {
 		callCount := 0
 		m := &notifyMock{
 			stringFunc: func() string { return "mock" },
-			sendFunc: func(subject, body string) error {
+			sendFunc: func(_, subject, body string) error {
 				callCount++
 				return nil
 			},

@@ -44,10 +44,8 @@ func New(ctx context.Context, typ, path string, cfg *types.Cfg) (Interface, erro
 		log.Printf("[INFO] using memory storage")
 	default:
 		dbPath := path
-		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-			if err := os.Mkdir(dbPath, 0755); err != nil {
-				return nil, fmt.Errorf("failed to create data directory: %w", err)
-			}
+		if err := os.MkdirAll(dbPath, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create data directory: %w", err)
 		}
 		dbFilePath := fmt.Sprintf("%s/%s", dbPath, "endpoll.db")
 		if legacyPath := fmt.Sprintf("%s/%s", dbPath, "jam.db"); fileExists(legacyPath) {
@@ -148,6 +146,7 @@ func AggregateDay(ts time.Time, responses []*types.HttpResponse) *types.HttpResp
 		Time:         0,
 	}
 	if len(responses) == 0 {
+		aggregation.StatusType = types.Unknown
 		return aggregation
 	}
 
@@ -208,8 +207,11 @@ func GenerateHistory(s Interface, start time.Time, id string) int {
 func randInt(min, max int) int {
 	return rand.IntN(max-min) + min
 }
+
 func hoursToMidnight() time.Duration {
-	return time.Until(time.Now().Truncate(24 * time.Hour).Add(24 * time.Hour).Add(time.Minute * 10))
+	now := time.Now()
+	next := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 10, 0, 0, now.Location())
+	return time.Until(next)
 }
 func fileExists(path string) bool {
 	_, err := os.Stat(path)

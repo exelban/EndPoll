@@ -59,9 +59,13 @@ func Ping(path ...string) func(http.Handler) http.Handler {
 	return f
 }
 
-func Auth(cfg *types.BasicAuth) func(http.Handler) http.Handler {
+func Auth(settings func() *types.BasicAuth) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var cfg *types.BasicAuth
+			if settings != nil {
+				cfg = settings()
+			}
 			if cfg == nil || (cfg.Username == "" && cfg.Password == "") {
 				next.ServeHTTP(w, r)
 				return
@@ -71,9 +75,9 @@ func Auth(cfg *types.BasicAuth) func(http.Handler) http.Handler {
 				return
 			}
 			user, pass, ok := r.BasicAuth()
-			if !ok ||
-				subtle.ConstantTimeCompare([]byte(user), []byte(cfg.Username)) != 1 ||
-				subtle.ConstantTimeCompare([]byte(pass), []byte(cfg.Password)) != 1 {
+			userOK := subtle.ConstantTimeCompare([]byte(user), []byte(cfg.Username)) == 1
+			passOK := subtle.ConstantTimeCompare([]byte(pass), []byte(cfg.Password)) == 1
+			if !ok || !userOK || !passOK {
 				w.Header().Set("WWW-Authenticate", `Basic realm="EndPoll"`)
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return

@@ -25,6 +25,7 @@ type Server struct {
 
 // Run - will initialize server and run it on provided port
 func (s *Server) Run(router http.Handler) error {
+	s.mu.Lock()
 	if s.Address == "*" {
 		s.Address = ""
 	}
@@ -48,7 +49,6 @@ func (s *Server) Run(router http.Handler) error {
 	}
 	log.Printf("[INFO] http rest server on %s:%d", addr, s.Port)
 
-	s.mu.Lock()
 	s.srv = &http.Server{
 		Addr:              fmt.Sprintf("%s:%d", s.Address, s.Port),
 		Handler:           router,
@@ -56,9 +56,10 @@ func (s *Server) Run(router http.Handler) error {
 		WriteTimeout:      s.WriteTimeout,
 		IdleTimeout:       s.IdleTimeout,
 	}
+	srv := s.srv
 	s.mu.Unlock()
 
-	if err := s.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("start http server, %s", err)
 	}
 
@@ -70,14 +71,14 @@ func (s *Server) Shutdown() error {
 	log.Print("[INFO] shutdown rest server")
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	srv := s.srv
+	s.mu.Unlock()
+	if srv == nil {
+		return nil
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	if err := s.srv.Shutdown(ctx); err != nil {
-		return err
-	}
-
-	return nil
+	return srv.Shutdown(ctx)
 }

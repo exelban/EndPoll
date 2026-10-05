@@ -26,7 +26,7 @@ func (t *Telegram) string() string {
 	return "telegram"
 }
 
-func (t *Telegram) send(subject, body string) error {
+func (t *Telegram) send(_, subject, body string) error {
 	g, _ := errgroup.WithContext(context.Background())
 	for _, chatID := range t.chatIDs {
 		id := chatID

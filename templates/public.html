@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Status page">
 
-  <title>{{ if .Data.IsHost }} {{ $el := (index .Data.Hosts 0) }} {{ if $el.Name }}{{ $el.Name }}{{ else }}{{ $el.Host }}{{ end }} -{{ else }}{{ if .Settings.Title }}{{ .Settings.Title }} - {{ end }}{{ end }} Status page</title>
+  <title>{{ if .Data.IsHost }} {{ $el := (index .Data.Hosts 0) }} {{ if $el.Name }}{{ $el.Name }}{{ else if $.Settings.HideURL }}{{ $el.ID }}{{ else }}{{ $el.Host }}{{ end }} -{{ else }}{{ if .Settings.Title }}{{ .Settings.Title }} - {{ end }}{{ end }} Status page</title>
 
   {{ template "style" . }}
 </head>
@@ -63,9 +63,9 @@
         <div class="info">
           {{ if .Host }}
             {{ if $root.Data.IsHost }}
-              {{ if .Name }}<p>{{ .Name }}</p>{{ else }}<p>{{ .Host }}</p>{{ end }}
+              <p>{{ if .Name }}{{ .Name }}{{ else if $root.Settings.HideURL }}{{ .ID }}{{ else }}{{ .Host }}{{ end }}</p>
             {{ else }}
-              <a href="{{ .ID }}">{{ if .Name }}{{ .Name }}{{ else }}{{ .Host }}{{ end }}</a>
+              <a href="{{ .ID }}">{{ if .Name }}{{ .Name }}{{ else if $root.Settings.HideURL }}{{ .ID }}{{ else }}{{ .Host }}{{ end }}</a>
             {{ end }}
             {{ if .Name }}{{ if not $root.Settings.HideURL }}<p>| {{ .Host }}</p>{{ end }}{{ end }}
             {{ if .Description }}
@@ -118,7 +118,7 @@
         <div class="panel">
           <div class="head">
             <div class="info">
-              <a href="{{ .ID }}">{{ if .Name }}{{ .Name }}{{ else }}{{ .Host }}{{ end }}</a>
+              <a href="{{ .ID }}">{{ if .Name }}{{ .Name }}{{ else if $root.Settings.HideURL }}{{ .ID }}{{ else }}{{ .Host }}{{ end }}</a>
               {{ if .Name }}{{ if not $root.Settings.HideURL }}<p>| {{ .Host }}</p>{{ end }}{{ end }}
             </div>
             <p class="status status-{{ .Status }}">{{ .Status }}</p>

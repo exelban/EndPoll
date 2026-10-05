@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+  pull_request:
 
 jobs:
   test:
@@ -24,5 +25,8 @@ jobs:
       - name: Generate mocks
         run: go generate ./...
 
+      - name: Vet
+        run: go vet ./...
+
       - name: Run tests
-        run: go test ./...
+        run: go test -race ./...

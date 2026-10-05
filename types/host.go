@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +17,13 @@ import (
 type Success struct {
 	Code []int   `json:"code" yaml:"code"`
 	Body *string `json:"body" yaml:"body"`
+}
+
+// DNSCheck - options of a dns host (url: dns://name)
+type DNSCheck struct {
+	Type     string   `json:"type,omitempty" yaml:"type,omitempty"`         // A, AAAA, CNAME, MX, NS, TXT (default: A)
+	Expect   []string `json:"expect,omitempty" yaml:"expect,omitempty"`     // values that must be present in the answer (optional)
+	Resolver string   `json:"resolver,omitempty" yaml:"resolver,omitempty"` // host:port of the dns server (default: system resolver)
 }
 
 // Host - host structure
@@ -40,6 +49,8 @@ type Host struct {
 	Headers    map[string]string `json:"headers,omitempty" yaml:"headers,omitempty"`
 
 	Alerts []string `json:"alerts,omitempty" yaml:"alerts,omitempty"`
+
+	DNS *DNSCheck `json:"dns,omitempty" yaml:"dns,omitempty"` // dns check options
 
 	Hidden bool `json:"hidden" yaml:"hidden"` // acceptable only if group is defined
 
@@ -82,12 +93,13 @@ func (h *Host) Status(code int, b []byte) bool {
 	return ok
 }
 
-// String - returns a name if available, otherwise returns the url
+// String - returns a name if available, otherwise returns the url.
+// Credentials in the url are masked: the value is used in logs and notifications.
 func (h *Host) String() string {
 	if h.Name == nil {
-		return h.URL
+		return h.SecureURL()
 	}
-	return fmt.Sprintf("%s (%s)", *h.Name, h.URL)
+	return fmt.Sprintf("%s (%s)", *h.Name, h.SecureURL())
 }
 
 // GetType - return a host type based on url
@@ -96,10 +108,27 @@ func (h *Host) GetType() HostType {
 		return h.Type
 	}
 
-	if strings.HasPrefix(h.URL, "mongodb://") {
-		return MongoType
+	scheme := ""
+	if i := strings.Index(h.URL, "://"); i > 0 {
+		scheme = strings.ToLower(h.URL[:i])
 	}
-	if !strings.Contains(h.URL, "http://") && !strings.Contains(h.URL, "https://") && isIPv4(h.URL) {
+	switch scheme {
+	case "mongodb", "mongodb+srv":
+		return MongoType
+	case "tcp":
+		return TCPType
+	case "dns":
+		return DNSType
+	case "redis", "rediss":
+		return RedisType
+	case "postgres", "postgresql":
+		return PostgresType
+	case "mysql":
+		return MySQLType
+	case "http", "https":
+		return HttpType
+	}
+	if isIPv4(h.URL) {
 		return ICMPType
 	}
 
@@ -108,19 +137,26 @@ func (h *Host) GetType() HostType {
 
 // SecureURL - returns a secure url that can be used in logs or alerts. It will hide the password if present.
 func (h *Host) SecureURL() string {
-	url := h.URL
-	if strings.HasPrefix(url, "mongodb://") {
-		if strings.Contains(url, "@") {
-			parts := strings.Split(url, "@")
-			creds := strings.Split(parts[0], ":")
-			if len(creds) == 3 {
-				creds[2] = "*****"
-				url = strings.Join(creds, ":") + "@" + parts[1]
-			}
-		}
-		return url
+	u, err := url.Parse(h.URL)
+	if err != nil || u.User == nil {
+		return h.URL
 	}
-	return url
+	if _, ok := u.User.Password(); !ok {
+		return h.URL
+	}
+	u.User = url.UserPassword(u.User.Username(), "*****")
+	return strings.ReplaceAll(u.String(), "%2A%2A%2A%2A%2A", "*****")
+}
+
+// Changed - reports whether the monitoring-relevant configuration of the host differs
+// from the other one. The position in the list (Index) is ignored.
+func (h *Host) Changed(other *Host) bool {
+	if other == nil {
+		return true
+	}
+	a, b := *h, *other
+	a.Index, b.Index = 0, 0
+	return !reflect.DeepEqual(a, b)
 }
 
 func isIPv4(host string) bool {

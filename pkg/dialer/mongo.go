@@ -15,28 +15,33 @@ import (
 
 // mongoCall makes a mongo request to the host
 func (d *Dialer) mongoCall(ctx context.Context, h *types.Host) (response types.HttpResponse) {
-	ctx_, cancel := context.WithTimeout(ctx, 10*time.Second)
+	response.Timestamp = time.Now()
+	start := time.Now()
+	defer func() {
+		response.Time = time.Since(start)
+	}()
+
+	ctx_, cancel := context.WithTimeout(ctx, timeout(h))
 	defer cancel()
 	client, err := mongo.Connect(ctx_, options.Client().ApplyURI(h.URL))
 	if err != nil {
-		log.Printf("[ERROR] connect mongo %v", err)
+		log.Printf("[ERROR] connect mongo %s: %v", h.SecureURL(), err)
 		response.Body = err.Error()
-		response.Code = 501
+		response.Code = 523
 		return
 	}
 	defer func() {
-		if err = client.Disconnect(ctx_); err != nil {
-			log.Printf("[ERROR] disconnect mongo %v", err)
+		if err = client.Disconnect(context.Background()); err != nil {
+			log.Printf("[ERROR] disconnect mongo %s: %v", h.SecureURL(), err)
 		}
 	}()
 
-	response.Timestamp = time.Now()
 	response.OK = true
 
 	if err := client.Ping(ctx_, nil); err != nil {
-		log.Printf("[ERROR] ping mongo %v", err)
+		log.Printf("[ERROR] ping mongo %s: %v", h.SecureURL(), err)
 		response.Body = err.Error()
-		response.Code = 501
+		response.Code = 523
 		return
 	}
 
@@ -47,7 +52,7 @@ func (d *Dialer) mongoCall(ctx context.Context, h *types.Host) (response types.H
 	mongoMetaData := MongoMetaData{}
 	db := client.Database("admin")
 
-	err = db.RunCommand(ctx_, bson.D{{"replSetGetStatus", 1}}).Decode(&mongoMetaData)
+	err = db.RunCommand(ctx_, bson.D{{Key: "replSetGetStatus", Value: 1}}).Decode(&mongoMetaData)
 	if err != nil {
 		if strings.Contains(err.Error(), "NoReplicationEnabled") && strings.Contains(h.URL, "replicaSet") {
 			response.Code = 502

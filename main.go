@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/exelban/EndPoll/api"
 	"github.com/exelban/EndPoll/pkg/html"
@@ -54,14 +55,16 @@ var fs embed.FS
 var version = "dev"
 
 func main() {
-	fmt.Println(version)
-
 	var args arguments
 	p := flags.NewParser(&args, flags.Default)
 	if _, err := p.Parse(); err != nil {
+		if flags.WroteHelp(err) {
+			os.Exit(0)
+		}
 		fmt.Printf("error parse args: %v", err)
 		os.Exit(1)
 	}
+	fmt.Println(version)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
@@ -94,6 +97,16 @@ func create(ctx context.Context, args arguments) (*app, error) {
 	if err != nil {
 		return nil, fmt.Errorf("new config: %w", err)
 	}
+	if args.SMTP.Host != "" {
+		cfg.DefaultSMTP = &types.SMTP{
+			Host:     args.SMTP.Host,
+			Port:     args.SMTP.Port,
+			Username: args.SMTP.Username,
+			Password: args.SMTP.Password,
+			From:     args.SMTP.From,
+			To:       args.SMTP.To,
+		}
+	}
 
 	storage, err := store.New(ctx, args.Storage.Type, args.Storage.Path, cfg)
 	if err != nil {
@@ -107,14 +120,15 @@ func create(ctx context.Context, args arguments) (*app, error) {
 
 		api: &api.Rest{
 			Monitor: &monitor.Monitor{
-				Store: storage,
+				Store:    storage,
+				CacheTTL: 5 * time.Second,
 			},
 			Templates: &html.Templates{
 				FS:    fs,
 				Debug: args.Debug,
 			},
 			Version: version,
-			UI:      &cfg.UI,
+			Config:  cfg,
 		},
 		config: cfg,
 		store:  storage,
@@ -125,39 +139,50 @@ func create(ctx context.Context, args arguments) (*app, error) {
 
 func (a *app) run(ctx context.Context) error {
 	if err := a.api.Templates.Run(ctx); err != nil {
-		log.Printf("[ERROR] generate templates: %v", err)
+		return fmt.Errorf("generate templates: %w", err)
 	}
 
+	srvErr := make(chan error, 1)
 	go func() {
-		if err := a.srv.Run(a.api.Router()); err != nil {
-			log.Printf("[ERROR] run rest server: %v", err)
-		}
+		srvErr <- a.srv.Run(a.api.Router())
 	}()
 
 	for {
 		select {
 		case <-a.config.FW:
+			// a broken configuration must not touch the running monitor:
+			// the previous (valid) configuration stays in effect until the file is fixed.
 			if err := a.config.Parse(); err != nil {
 				log.Printf("[ERROR] parse config: %v", err)
+				continue
 			}
 			if err := a.config.Validate(); err != nil {
 				log.Printf("[ERROR] validate config: %v", err)
+				continue
 			}
-			if err := a.api.Monitor.Run(a.config); err != nil {
+			if err := a.api.Monitor.Run(ctx, a.config); err != nil {
 				log.Printf("[ERROR] run monitor: %v", err)
+			}
+		case err := <-srvErr:
+			if err != nil {
+				a.shutdown()
+				return fmt.Errorf("rest server: %w", err)
 			}
 		case <-ctx.Done():
 			log.Print("[DEBUG] terminating...")
-
-			if err := a.srv.Shutdown(); err != nil {
-				log.Printf("[ERROR] rest shutdown %v", err)
-			}
-			if err := a.store.Close(); err != nil {
-				log.Printf("[ERROR] store close %v", err)
-			}
-
+			a.shutdown()
 			log.Print("[INFO] terminated")
 			return nil
 		}
+	}
+}
+
+func (a *app) shutdown() {
+	if err := a.srv.Shutdown(); err != nil {
+		log.Printf("[ERROR] rest shutdown %v", err)
+	}
+	a.api.Monitor.Stop()
+	if err := a.store.Close(); err != nil {
+		log.Printf("[ERROR] store close %v", err)
 	}
 }

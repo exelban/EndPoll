@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 
@@ -22,7 +23,7 @@ import (
 type Rest struct {
 	Monitor   *monitor.Monitor
 	Templates *html.Templates
-	UI        *types.UI
+	Config    *types.Cfg
 
 	Version string
 
@@ -36,13 +37,19 @@ func (s *Rest) Router() *http.ServeMux {
 	s.minify.AddFunc("image/svg+xml", svg.Minify)
 	s.minify.AddFunc("application/javascript", js.Minify)
 
-	router := NewRouter(Recoverer, CORS, Ping(), Auth(s.UI.BasicAuth), Info("EndPoll", s.Version))
+	router := NewRouter(Recoverer, CORS, Ping(), Auth(s.basicAuth), Info("EndPoll", s.Version))
 
 	router.HandleFunc("GET /", s.public)
 	router.HandleFunc("GET /{id}", s.public)
 	router.HandleFunc("GET /static/", s.static)
 
 	router.HandleFunc("GET /response-time/{id}", s.responseTime)
+
+	router.HandleFunc("GET /api/hosts", s.apiHosts)
+	router.HandleFunc("GET /api/hosts/{id}", s.apiHost)
+	router.HandleFunc("GET /api/hosts/{id}/response-time", s.apiResponseTime)
+	router.HandleFunc("GET /api/incidents", s.apiIncidents)
+	router.HandleFunc("GET /metrics", s.metrics)
 
 	return router.mux
 }
@@ -73,12 +80,13 @@ func (s *Rest) public(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ui := s.ui()
 	data := struct {
 		Data     *types.Stats
 		Settings *types.UI
 	}{
 		Data:     stats,
-		Settings: s.UI,
+		Settings: &ui,
 	}
 
 	var buf bytes.Buffer
@@ -115,12 +123,13 @@ func (s *Rest) notFound(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusNotFound)
 	_, _ = w.Write(minified)
 }
 
 func (s *Rest) static(w http.ResponseWriter, r *http.Request) {
 	path := fmt.Sprintf("templates%s", r.URL.Path)
-	if _, err := s.Templates.FS.Open(path); err != nil {
+	if fi, err := fs.Stat(s.Templates.FS, path); err != nil || fi.IsDir() {
 		s.notFound(w, r)
 		return
 	}
@@ -169,4 +178,14 @@ func (s *Rest) responseTime(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[ERROR] render chart: %v", err)
 		http.Error(w, fmt.Sprintf("error render chart: %v", err), http.StatusInternalServerError)
 	}
+}
+
+func (s *Rest) ui() types.UI {
+	if s.Config == nil {
+		return types.UI{}
+	}
+	return s.Config.GetUI()
+}
+func (s *Rest) basicAuth() *types.BasicAuth {
+	return s.ui().BasicAuth
 }

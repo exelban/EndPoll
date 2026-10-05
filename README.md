@@ -8,13 +8,14 @@ EndPoll is a lightweight, self-hosted status page and monitoring tool. It period
 
 ## Features
 
-- **Multiprotocol monitoring** — HTTP/HTTPS, MongoDB, and ICMP (ping)
+- **Multiprotocol monitoring** — HTTP/HTTPS, TCP, DNS, ICMP (ping), MongoDB, Redis, PostgreSQL and MySQL
 - **90-day history** with automatic daily aggregation
 - **Incident tracking** — records downtime events with duration and status codes
 - **Host grouping** — organize hosts into named groups with optional hidden members
-- **Notifications** — Slack, Telegram, and SMTP (email)
+- **Notifications** — Slack, Telegram, SMTP (email), Discord, Microsoft Teams, Mattermost/Rocket.Chat, Pushover, ntfy, Twilio SMS, BotComm and generic webhooks
 - **Hot reload** — config file changes are picked up automatically without restart
 - **Response time charts** — per-host response time graph rendered as PNG
+- **JSON API and Prometheus metrics** — integrate with dashboards, Grafana and alerting
 - **SSL certificate monitoring** — tracks expiry dates for HTTPS hosts
 - **Detailed timing** — DNS, TLS handshake, connect, and TTFB breakdown for HTTP checks
 - **Threshold-based status** — configurable success/failure thresholds to prevent flapping
@@ -107,6 +108,8 @@ EndPoll is configured via a YAML or JSON file. The file is watched for changes a
 | `--smtp.from` | `SMTP_FROM` | | Sender email address |
 | `--smtp.to` | `SMTP_TO` | | Recipient email address(es) |
 
+The `--smtp.*` flags are a fallback: they are used only when the configuration file does not define `notifications.smtp`.
+
 ### Config file reference
 
 #### Global settings
@@ -146,7 +149,7 @@ headers:
 ```yaml
 ui:
   title: "My Status Page"  # browser tab title
-  hideURL: false            # hide host URLs from the dashboard
+  hideURL: false            # hide host URLs from the dashboard (hosts without a name are shown by their id)
   basicAuth:                # protect the dashboard with basic authentication (optional)
     username: "admin"
     password: "secret"
@@ -176,6 +179,10 @@ notifications:
   initializationMessage: true
   # Send a message when EndPoll shuts down (default: false)
   shutdownMessage: false
+  # Minimal time between two identical notifications (same host, same status,
+  # same channel). Prevents a flapping host from spamming the channels.
+  # Default: 5m, set to 0 to disable.
+  cooldown: 5m
 
   slack:
     token: "xoxb-your-token"
@@ -195,7 +202,73 @@ notifications:
     from: "endpoll@example.com"
     to:
       - "admin@example.com"
+    insecureSkipVerify: false  # skip TLS certificate verification (default: false)
+
+  # generic HTTP webhook: receives a JSON document per event
+  webhook:
+    url: "https://example.com/hooks/endpoll"
+    method: POST                  # optional, default: POST
+    headers:                      # optional
+      Authorization: "Bearer token"
+
+  discord:
+    webhookURL: "https://discord.com/api/webhooks/..."
+    username: "EndPoll"           # optional
+
+  teams:
+    webhookURL: "https://prod-00.westus.logic.azure.com:443/workflows/..."
+
+  # Slack-compatible incoming webhook (Mattermost, Rocket.Chat, ...)
+  mattermost:
+    webhookURL: "https://mattermost.example.com/hooks/..."
+    channel: "monitoring"         # optional
+    username: "EndPoll"           # optional
+
+  pushover:
+    token: "application token"
+    user: "user or group key"
+    priority: 0                   # optional, -2..2 (2 = emergency, repeats until acknowledged)
+
+  ntfy:
+    url: "https://ntfy.sh"        # optional, self-hosted server url
+    topic: "endpoll"
+    token: "tk_..."               # optional, access token
+    priority: 3                   # optional, 1..5
+
+  twilio:
+    accountSID: "AC..."
+    authToken: "..."
+    from: "+15005550006"          # sender number or messaging service sid
+    to:
+      - "+15005550001"
+
+  botcomm:
+    clientID: "your-bot-client-id"
+    clientSecret: "your-bot-client-secret"
+    sessionIDs:                   # optional; omit or use [] to broadcast to everyone connected to the bot
+      - "YOUR_SESSION_ID"
 ```
+
+Channel names for the per-host `alerts` list: `slack`, `telegram`, `smtp`, `webhook`, `discord`, `teams`, `mattermost`, `pushover`, `ntfy`, `twilio`, `botcomm`.
+
+BotComm sends messages to `https://api.botcomm.app/message` using HTTP Basic authentication. Create a bot in BotComm to get its client ID and client secret, and copy recipient Session IDs from Chat Settings on web or iOS. Keep the secret in your server-side configuration. Empty or whitespace-only Session IDs are rejected. With no Session IDs, messages are broadcast to everyone connected to the bot, including the owner; a `202` response means the broadcast was queued, not delivered. Broadcasts require a backend supporting Basic-auth broadcasts and are limited to one per minute and 24 per day per bot. Sending stops at the first error, so earlier recipients may already have received the message; EndPoll does not automatically retry BotComm requests.
+
+The webhook payload of a status change:
+
+```json
+{
+  "id": "j_3vve.down.1725000000000000000",
+  "type": "host",
+  "subject": "❌ Google is DOWN",
+  "status": "down",
+  "host": {"id": "j_3vve", "name": "Google", "url": "https://www.google.com", "group": "Search"},
+  "timestamp": "2025-08-30T10:00:00Z"
+}
+```
+
+The startup/shutdown messages have `"type": "system"` and a `"message"` field instead of `status`/`host`.
+
+Notifications are sent when a host changes its status (after the configured thresholds). A notification that failed to be delivered to one channel does not prevent the delivery to the other channels. The startup/shutdown messages are sent once per process, a configuration reload does not repeat them.
 
 #### Hosts
 
@@ -231,6 +304,27 @@ The host type is auto-detected from the URL:
 | HTTP/HTTPS | URLs starting with `http://` or `https://` | `https://example.com` |
 | MongoDB | URLs starting with `mongodb://` | `mongodb://user:pass@host:27017` |
 | ICMP | IPv4 addresses without a scheme | `192.168.1.1` |
+| TCP | `tcp://host:port` | `tcp://db.internal:5432` |
+| DNS | `dns://name` | `dns://example.com` |
+| Redis | `redis://` or `rediss://` (TLS) | `redis://:password@cache.internal:6379/0` |
+| PostgreSQL | `postgres://` or `postgresql://` | `postgres://user:pass@db.internal:5432/app?sslmode=disable` |
+| MySQL / MariaDB | `mysql://` | `mysql://user:pass@db.internal:3306/app` |
+
+TCP opens a connection and closes it. Redis sends `AUTH` (when credentials are given), `SELECT` (when a database is given) and `PING`. PostgreSQL and MySQL connect and run `SELECT 1`. Passwords are masked everywhere they are displayed (UI, API, logs, notifications).
+
+DNS resolves the name and, optionally, checks that the expected records are present:
+
+```yaml
+hosts:
+  - name: "Website DNS"
+    url: "dns://example.com"
+    dns:
+      type: A                       # A, AAAA, CNAME, MX, NS, TXT (default: A)
+      expect: ["93.184.216.34"]     # every listed value must be in the answer (optional)
+      resolver: "1.1.1.1:53"        # dns server to query (default: system resolver)
+```
+
+ICMP checks on Linux use raw sockets, which require the `CAP_NET_RAW` capability (granted by default to Docker containers). On macOS no special permissions are needed. `mongodb+srv://` URLs are detected as MongoDB as well.
 
 You can also set the type explicitly:
 
@@ -336,7 +430,66 @@ hosts:
 | `GET` | `/` | Status dashboard (all hosts) |
 | `GET` | `/{id}` | Detail page for a single host |
 | `GET` | `/response-time/{id}` | Response time chart (PNG) |
+| `GET` | `/api/hosts` | JSON: overall status and the state of every host |
+| `GET` | `/api/hosts/{id}` | JSON: host details, 30-day stats, history and incidents |
+| `GET` | `/api/hosts/{id}/response-time` | JSON: average response time per day |
+| `GET` | `/api/incidents` | JSON: recent incidents of every host, newest first |
+| `GET` | `/metrics` | Prometheus metrics |
 | `GET` | `/ping` | Health check (returns `ok`) |
+
+All endpoints except `/ping` are protected by `ui.basicAuth` when it is configured.
+
+### JSON API
+
+```bash
+curl -s http://localhost:8822/api/hosts | jq
+```
+
+```json
+{
+  "status": "up",
+  "hosts": [
+    {
+      "id": "j_3vve", "name": "Google", "url": "https://www.google.com", "group": "Search",
+      "type": "http", "status": "up", "uptime": 100,
+      "lastCheck": "2025-08-30T10:00:00Z",
+      "last": {"code": 200, "responseTimeMs": 87, "sslExpiry": "2025-11-01T00:00:00Z", "sslIssuer": "Google Trust Services", "tlsVersion": "TLS 1.3"}
+    }
+  ]
+}
+```
+
+`/api/hosts/{id}` adds `details` (30-day uptime and response time, SSL, last outage), `history` (the last 90 checks) and `incidents`.
+
+### Prometheus metrics
+
+`/metrics` exposes one sample per host with the labels `id`, `name`, `group` and `type`:
+
+| Metric | Description |
+|--------|-------------|
+| `endpoll_host_up` | `1` up, `0` down/degraded (absent while unknown) |
+| `endpoll_host_status{status="up\|degraded\|down\|unknown"}` | `1` for the current status |
+| `endpoll_host_response_seconds` | duration of the last check |
+| `endpoll_host_response_code` | status code of the last check (HTTP code or `521`/`522`/`523`) |
+| `endpoll_host_last_check_timestamp_seconds` | unix time of the last check |
+| `endpoll_host_ssl_expiry_timestamp_seconds` | unix time of the certificate expiration (HTTPS hosts) |
+| `endpoll_host_uptime_ratio` | uptime of the last 90 days (0..1) |
+| `endpoll_build_info{version}` | build information |
+
+Example alert rule:
+
+```yaml
+- alert: HostDown
+  expr: endpoll_host_up == 0
+  for: 5m
+  labels: {severity: critical}
+  annotations: {summary: "{{ $labels.name }} is down"}
+- alert: CertificateExpiresSoon
+  expr: (endpoll_host_ssl_expiry_timestamp_seconds - time()) / 86400 < 14
+  labels: {severity: warning}
+```
+
+When `basicAuth` is enabled, configure `basic_auth` in the Prometheus scrape job.
 
 ## License
 

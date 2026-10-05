@@ -44,9 +44,9 @@ func TestSlack_send(t *testing.T) {
 		timeout: time.Millisecond * 10,
 	}
 
-	require.NoError(t, slack.send("", "test"))
-	require.Error(t, slack.send("", "error"))
-	require.Error(t, slack.send("", "timeout"))
+	require.NoError(t, slack.send("", "", "test"))
+	require.Error(t, slack.send("", "", "error"))
+	require.Error(t, slack.send("", "", "timeout"))
 }
 
 func TestSlack_normalize(t *testing.T) {
@@ -106,7 +106,7 @@ func TestSlack_send_ResponseBodyClosed(t *testing.T) {
 		channel: "test-channel",
 		timeout: time.Second,
 	}
-	require.NoError(t, s.send("subject", "body"))
+	require.NoError(t, s.send("", "subject", "body"))
 }
 
 func TestSlack_send_NonOkResponse(t *testing.T) {
@@ -124,7 +124,7 @@ func TestSlack_send_NonOkResponse(t *testing.T) {
 		channel: "test",
 		timeout: time.Second,
 	}
-	err := s.send("subject", "body")
+	err := s.send("", "subject", "body")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "non-ok")
 }

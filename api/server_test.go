@@ -55,10 +55,12 @@ func TestServer_Defaults(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Default port should be 8080
+	s.mu.Lock()
 	require.Equal(t, 8080, s.Port)
 	require.Equal(t, 10*time.Second, s.ReadHeaderTimeout)
 	require.Equal(t, 30*time.Second, s.WriteTimeout)
 	require.Equal(t, 60*time.Second, s.IdleTimeout)
+	s.mu.Unlock()
 
 	require.NoError(t, s.Shutdown())
 	<-errCh
@@ -77,7 +79,9 @@ func TestServer_WildcardAddress(t *testing.T) {
 	}()
 
 	time.Sleep(100 * time.Millisecond)
+	s.mu.Lock()
 	require.Equal(t, "", s.Address) // * should be converted to empty
+	s.mu.Unlock()
 
 	require.NoError(t, s.Shutdown())
 	<-errCh

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -341,7 +342,6 @@ func TestConfig_Reload(t *testing.T) {
 		require.NoError(t, cfg.Parse())
 		require.NoError(t, cfg.Validate())
 
-		addr := fmt.Sprintf("%p", cfg.Hosts[0])
 		require.Equal(t, "test", cfg.Hosts[0].URL)
 
 		_, _ = jsonFile.WriteAt([]byte(`{"hosts": [{"url": "test", "name": "test", "hidden": true, "description": "test", "group": "test", "method": "test"}]}`), 0)
@@ -353,9 +353,6 @@ func TestConfig_Reload(t *testing.T) {
 		require.Equal(t, "test", *cfg.Hosts[0].Group)
 		require.Equal(t, "test", cfg.Hosts[0].Method)
 		require.True(t, cfg.Hosts[0].Hidden)
-
-		nextAddr := fmt.Sprintf("%p", cfg.Hosts[0])
-		require.Equal(t, addr, nextAddr)
 	})
 	t.Run("yaml", func(t *testing.T) {
 		yamlFile, _ := os.CreateTemp("/tmp", "*.yaml")
@@ -518,5 +515,64 @@ func TestConfig_Validate_MultipleHosts(t *testing.T) {
 		require.NotEmpty(t, h.ID)
 		require.NotNil(t, h.Interval)
 		require.NotNil(t, h.TimeoutInterval)
+	}
+}
+
+func TestConfig_Validate_BotComm(t *testing.T) {
+	cases := []struct {
+		name   string
+		config BotComm
+		err    string
+	}{
+		{name: "missing credentials", err: "botcomm: clientID and clientSecret are required"},
+		{name: "missing client ID", config: BotComm{ClientSecret: "secret"}, err: "botcomm: clientID and clientSecret are required"},
+		{name: "missing client secret", config: BotComm{ClientID: "client"}, err: "botcomm: clientID and clientSecret are required"},
+		{name: "empty session ID", config: BotComm{ClientID: "client", ClientSecret: "secret", SessionIDs: []string{"valid", ""}}, err: "botcomm: sessionIDs must not contain empty IDs"},
+		{name: "whitespace session ID", config: BotComm{ClientID: "client", ClientSecret: "secret", SessionIDs: []string{" \t\n"}}, err: "botcomm: sessionIDs must not contain empty IDs"},
+		{name: "broadcast", config: BotComm{ClientID: "client", ClientSecret: "secret"}},
+		{name: "empty recipients broadcast", config: BotComm{ClientID: "client", ClientSecret: "secret", SessionIDs: []string{}}},
+		{name: "targeted", config: BotComm{ClientID: "client", ClientSecret: "secret", SessionIDs: []string{"session-1", "session-2"}}},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Cfg{
+				Notifications: Notifications{BotComm: &tt.config},
+				FileHosts:     []*Host{{URL: "https://example.com"}},
+			}
+			if tt.err != "" {
+				require.EqualError(t, cfg.Validate(), "notifications: "+tt.err)
+				return
+			}
+			require.NoError(t, cfg.Validate())
+		})
+	}
+}
+
+func TestConfig_Parse_BotComm(t *testing.T) {
+	cases := map[string]string{
+		"json": `{"notifications":{"botcomm":{"clientID":"client","clientSecret":"secret","sessionIDs":["session-1","session-2"]}},"hosts":[{"url":"https://example.com","alerts":["botcomm"]}]}`,
+		"yaml": `notifications:
+  botcomm:
+    clientID: client
+    clientSecret: secret
+    sessionIDs:
+      - session-1
+      - session-2
+hosts:
+  - url: https://example.com
+    alerts: [botcomm]
+`,
+	}
+	for format, content := range cases {
+		t.Run(format, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config."+format)
+			require.NoError(t, os.WriteFile(path, []byte(content), 0600))
+
+			cfg := &Cfg{path: path}
+			require.NoError(t, cfg.Parse())
+			require.NoError(t, cfg.Validate())
+			require.Equal(t, &BotComm{ClientID: "client", ClientSecret: "secret", SessionIDs: []string{"session-1", "session-2"}}, cfg.Notifications.BotComm)
+			require.Equal(t, []string{"botcomm"}, cfg.Hosts[0].Alerts)
+		})
 	}
 }

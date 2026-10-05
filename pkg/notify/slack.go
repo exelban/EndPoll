@@ -23,7 +23,7 @@ func (s *Slack) string() string {
 	return "slack"
 }
 
-func (s *Slack) send(subject, body string) error {
+func (s *Slack) send(_, subject, body string) error {
 	b, _ := json.Marshal(struct {
 		Username string `json:"username,omitempty"`
 		Channel  string `json:"channel,omitempty"`
