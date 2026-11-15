@@ -15,6 +15,19 @@ import (
 	"github.com/exelban/EndPoll/types"
 )
 
+// Status - returns the combined current status of all hosts.
+func (m *Monitor) Status() types.StatusType {
+	snapshots := m.Snapshots()
+	if len(snapshots) == 0 {
+		return types.Unknown
+	}
+	hosts := make([]types.Stat, 0, len(snapshots))
+	for _, snap := range snapshots {
+		hosts = append(hosts, types.Stat{Status: snap.Status})
+	}
+	return generateGroupStatus(&hosts, nil)
+}
+
 // Stats - returns the stats of all hosts grouped by groups
 func (m *Monitor) Stats(ctx context.Context) (*types.Stats, error) {
 	if v, ok := m.cache.Get("stats"); ok {

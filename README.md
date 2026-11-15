@@ -147,7 +147,7 @@ ui:
     password: "secret"
 ```
 
-When `basicAuth` is set, all pages require credentials. The `/healthz` health check endpoint remains unauthenticated.
+When `basicAuth` is set, all pages require credentials. The `/health` and `/healthz` endpoints remain unauthenticated.
 
 #### Connectivity check
 
@@ -429,9 +429,12 @@ hosts:
 | `GET` | `/api/hosts/{id}/response-time` | JSON: average response time per day |
 | `GET` | `/api/incidents` | JSON: recent incidents of every host, newest first |
 | `GET` | `/metrics` | Prometheus metrics |
+| `GET` | `/health` | JSON: combined current status of all monitored resources |
 | `GET` | `/healthz` | Health check (returns `ok`) |
 
-All endpoints except `/healthz` are protected by `ui.basicAuth` when it is configured.
+All endpoints except `/health` and `/healthz` are protected by `ui.basicAuth` when it is configured.
+
+`/health` returns `{"status":"up"}` with HTTP `200` when resources are healthy. It returns HTTP `503` for `down` (all resources down), `degraded` (partial failures), or `unknown` (no resources or no known results). Healthy resources mixed with unknown resources report `up`. Hidden resources are included. The endpoint uses current monitoring results without triggering checks or loading history.
 
 ### JSON API
 

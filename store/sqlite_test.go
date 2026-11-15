@@ -308,7 +308,7 @@ func TestSQLite_New(t *testing.T) {
 	for _, name := range []string{"endpoll.db", "jam.db"} {
 		bolt, err := NewBolt(ctx, filepath.Join(dir, name))
 		require.NoError(t, err)
-		r := &types.HttpResponse{Timestamp: day, StatusType: types.DOWN}
+		r := &types.HttpResponse{Timestamp: day.UTC(), StatusType: types.DOWN}
 		require.NoError(t, bolt.AddResponse(ctx, "bolt-host", r))
 
 		s, err := New(ctx, "sqlite", dir)

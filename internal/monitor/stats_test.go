@@ -12,6 +12,36 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestMonitor_Status(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		statuses []types.StatusType
+		want     types.StatusType
+	}{
+		{name: "no hosts", want: types.Unknown},
+		{name: "unknown", statuses: []types.StatusType{types.Unknown}, want: types.Unknown},
+		{name: "all up", statuses: []types.StatusType{types.UP, types.UP}, want: types.UP},
+		{name: "all down", statuses: []types.StatusType{types.DOWN, types.DOWN}, want: types.DOWN},
+		{name: "partial failure", statuses: []types.StatusType{types.UP, types.DOWN}, want: types.DEGRADED},
+		{name: "degraded", statuses: []types.StatusType{types.DEGRADED}, want: types.DEGRADED},
+		{name: "up and unknown", statuses: []types.StatusType{types.UP, types.Unknown}, want: types.UP},
+		{name: "down and unknown", statuses: []types.StatusType{types.DOWN, types.Unknown}, want: types.DEGRADED},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m := Monitor{watchers: make(map[string]*watcher)}
+			group := "group"
+			for i, status := range tt.statuses {
+				id := string(rune('a' + i))
+				m.watchers[id] = &watcher{
+					host:   &types.Host{ID: id, Group: &group, Hidden: true},
+					status: status,
+				}
+			}
+			require.Equal(t, tt.want, m.Status())
+		})
+	}
+}
+
 func TestMonitor_Stats(t *testing.T) {
 	ctx := context.Background()
 	interval := time.Hour

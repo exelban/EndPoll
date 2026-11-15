@@ -70,7 +70,7 @@ func Auth(settings func() *types.BasicAuth) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			if r.URL.Path == "/healthz" {
+			if r.URL.Path == "/healthz" || r.URL.Path == "/health" {
 				next.ServeHTTP(w, r)
 				return
 			}

@@ -113,7 +113,7 @@ func TestBolt_LegacyResponseKeys(t *testing.T) {
 	incidents, err := s.FindIncidents(ctx, hostID, 0, 0)
 	require.NoError(t, err)
 	require.Len(t, incidents, 1)
-	require.Equal(t, ts, incidents[0].StartTS)
+	require.WithinDuration(t, ts, incidents[0].StartTS, 0)
 
 	history, err := s.FindResponses(ctx, hostID)
 	require.NoError(t, err)

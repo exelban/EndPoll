@@ -50,6 +50,7 @@ func (s *Rest) Router() *http.ServeMux {
 	router.HandleFunc("GET /api/hosts/{id}/response-time", s.apiResponseTime)
 	router.HandleFunc("GET /api/incidents", s.apiIncidents)
 	router.HandleFunc("GET /metrics", s.metrics)
+	router.HandleFunc("GET /health", s.health)
 
 	return router.mux
 }

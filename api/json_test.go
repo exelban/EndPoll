@@ -60,6 +60,43 @@ func getJSON(t *testing.T, url string, v any) int {
 	return resp.StatusCode
 }
 
+func TestAPI_Health(t *testing.T) {
+	srv, _, shutdown := apiServer(t)
+	defer shutdown()
+
+	var res map[string]string
+	require.Equal(t, http.StatusOK, getJSON(t, srv.URL+"/health", &res))
+	require.Equal(t, map[string]string{"status": "up"}, res)
+}
+
+func TestAPI_HealthWithAuth(t *testing.T) {
+	rest := &Rest{
+		Monitor: &monitor.Monitor{},
+		Config: &types.Cfg{UI: types.UI{
+			BasicAuth: &types.BasicAuth{Username: "user", Password: "secret"},
+		}},
+	}
+	router := rest.Router()
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/health", nil))
+	require.Equal(t, http.StatusServiceUnavailable, w.Code)
+	require.Contains(t, w.Header().Get("Content-Type"), "application/json")
+	require.JSONEq(t, `{"status":"unknown"}`, w.Body.String())
+	require.Empty(t, w.Header().Get("WWW-Authenticate"))
+
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, "ok", w.Body.String())
+
+	for _, path := range []string{"/", "/api/hosts", "/metrics", "/health/"} {
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		require.Equal(t, http.StatusUnauthorized, w.Code)
+	}
+}
+
 func TestAPI_Hosts(t *testing.T) {
 	srv, host, shutdown := apiServer(t)
 	defer shutdown()

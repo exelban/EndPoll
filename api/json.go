@@ -211,6 +211,15 @@ func (s *Rest) apiIncidents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"incidents": incidents})
 }
 
+func (s *Rest) health(w http.ResponseWriter, r *http.Request) {
+	status := s.Monitor.Status()
+	code := http.StatusServiceUnavailable
+	if status == types.UP {
+		code = http.StatusOK
+	}
+	writeJSON(w, code, map[string]types.StatusType{"status": status})
+}
+
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
