@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -73,11 +74,11 @@ func TestWebhook(t *testing.T) {
 	defer srv.Close()
 
 	w := &Webhook{url: srv.URL, method: http.MethodPut, headers: map[string]string{"Authorization": "Bearer x"}}
-	require.Equal(t, "webhook", w.string())
+	require.Equal(t, "webhook", w.String())
 
 	t.Run("host status", func(t *testing.T) {
-		subject, body := w.normalize(testHost(), types.DOWN)
-		require.NoError(t, w.send("evt.1", subject, body))
+		subject, body := w.Normalize(testHost(), types.DOWN)
+		require.NoError(t, w.Send(context.Background(), "evt.1", subject, body))
 
 		r := srv.last()
 		require.Equal(t, http.MethodPut, r.method)
@@ -98,7 +99,7 @@ func TestWebhook(t *testing.T) {
 	})
 
 	t.Run("system message", func(t *testing.T) {
-		require.NoError(t, w.send("evt.2", "EndPoll status", "I'm online"))
+		require.NoError(t, w.Send(context.Background(), "evt.2", "EndPoll status", "I'm online"))
 		m := jsonBody(t, srv.last().body)
 		require.Equal(t, "system", m["type"])
 		require.Equal(t, "I'm online", m["message"])
@@ -108,14 +109,14 @@ func TestWebhook(t *testing.T) {
 	t.Run("non-2xx is an error", func(t *testing.T) {
 		bad := newCapture(http.StatusInternalServerError)
 		defer bad.Close()
-		err := (&Webhook{url: bad.URL}).send("evt", "s", "b")
+		err := (&Webhook{url: bad.URL}).Send(context.Background(), "evt", "s", "b")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "500")
 		require.Contains(t, err.Error(), "response body")
 	})
 
 	t.Run("default method is POST", func(t *testing.T) {
-		require.NoError(t, (&Webhook{url: srv.URL}).send("evt", "s", "b"))
+		require.NoError(t, (&Webhook{url: srv.URL}).Send(context.Background(), "evt", "s", "b"))
 		require.Equal(t, http.MethodPost, srv.last().method)
 	})
 }
@@ -125,17 +126,17 @@ func TestDiscord(t *testing.T) {
 	defer srv.Close()
 
 	d := &Discord{url: srv.URL, username: "EndPoll"}
-	require.Equal(t, "discord", d.string())
+	require.Equal(t, "discord", d.String())
 
-	subject, body := d.normalize(testHost(), types.UP)
-	require.NoError(t, d.send("evt", subject, body))
+	subject, body := d.Normalize(testHost(), types.UP)
+	require.NoError(t, d.Send(context.Background(), "evt", subject, body))
 
 	m := jsonBody(t, srv.last().body)
 	require.Equal(t, "EndPoll", m["username"])
 	require.Contains(t, m["content"], "**✅ Google is UP**")
 	require.Contains(t, m["content"], "https://www.google.com")
 
-	require.NoError(t, d.send("evt", "EndPoll status", ""))
+	require.NoError(t, d.Send(context.Background(), "evt", "EndPoll status", ""))
 	require.Equal(t, "EndPoll status", jsonBody(t, srv.last().body)["content"])
 }
 
@@ -144,10 +145,10 @@ func TestTeams(t *testing.T) {
 	defer srv.Close()
 
 	c := &Teams{url: srv.URL}
-	require.Equal(t, "teams", c.string())
+	require.Equal(t, "teams", c.String())
 
-	subject, body := c.normalize(testHost(), types.DOWN)
-	require.NoError(t, c.send("evt", subject, body))
+	subject, body := c.Normalize(testHost(), types.DOWN)
+	require.NoError(t, c.Send(context.Background(), "evt", subject, body))
 
 	m := jsonBody(t, srv.last().body)
 	require.Equal(t, "message", m["type"])
@@ -166,10 +167,10 @@ func TestMattermost(t *testing.T) {
 	defer srv.Close()
 
 	m := &Mattermost{url: srv.URL, channel: "ops", username: "EndPoll"}
-	require.Equal(t, "mattermost", m.string())
+	require.Equal(t, "mattermost", m.String())
 
-	subject, body := m.normalize(testHost(), types.DOWN)
-	require.NoError(t, m.send("evt", subject, body))
+	subject, body := m.Normalize(testHost(), types.DOWN)
+	require.NoError(t, m.Send(context.Background(), "evt", subject, body))
 
 	p := jsonBody(t, srv.last().body)
 	require.Equal(t, "ops", p["channel"])
@@ -182,10 +183,10 @@ func TestPushover(t *testing.T) {
 	defer srv.Close()
 
 	p := &Pushover{url: srv.URL, token: "app", user: "usr", priority: 2}
-	require.Equal(t, "pushover", p.string())
+	require.Equal(t, "pushover", p.String())
 
-	subject, body := p.normalize(testHost(), types.DOWN)
-	require.NoError(t, p.send("evt", subject, body))
+	subject, body := p.Normalize(testHost(), types.DOWN)
+	require.NoError(t, p.Send(context.Background(), "evt", subject, body))
 
 	r := srv.last()
 	require.Contains(t, r.headers.Get("Content-Type"), "application/x-www-form-urlencoded")
@@ -200,7 +201,7 @@ func TestPushover(t *testing.T) {
 	require.Equal(t, "3600", values.Get("expire"), "emergency priority requires expire")
 
 	p.priority = 0
-	require.NoError(t, p.send("evt", subject, body))
+	require.NoError(t, p.Send(context.Background(), "evt", subject, body))
 	values, _ = url.ParseQuery(string(srv.last().body))
 	require.Empty(t, values.Get("retry"))
 }
@@ -210,10 +211,10 @@ func TestNtfy(t *testing.T) {
 	defer srv.Close()
 
 	n := &Ntfy{url: srv.URL + "/", topic: "endpoll", token: "tk_1", priority: 4}
-	require.Equal(t, "ntfy", n.string())
+	require.Equal(t, "ntfy", n.String())
 
-	subject, body := n.normalize(testHost(), types.DOWN)
-	require.NoError(t, n.send("evt", subject, body))
+	subject, body := n.Normalize(testHost(), types.DOWN)
+	require.NoError(t, n.Send(context.Background(), "evt", subject, body))
 
 	r := srv.last()
 	require.Equal(t, "/", r.path)
@@ -224,12 +225,12 @@ func TestNtfy(t *testing.T) {
 	require.Equal(t, float64(4), m["priority"])
 	require.Equal(t, []any{"x"}, m["tags"])
 
-	subject, body = n.normalize(testHost(), types.UP)
-	require.NoError(t, n.send("evt", subject, body))
+	subject, body = n.Normalize(testHost(), types.UP)
+	require.NoError(t, n.Send(context.Background(), "evt", subject, body))
 	require.Equal(t, []any{"white_check_mark"}, jsonBody(t, srv.last().body)["tags"])
 
 	n.token = ""
-	require.NoError(t, n.send("evt", "EndPoll status", "I'm online"))
+	require.NoError(t, n.Send(context.Background(), "evt", "EndPoll status", "I'm online"))
 	require.Empty(t, srv.last().headers.Get("Authorization"))
 }
 
@@ -238,11 +239,11 @@ func TestTwilio(t *testing.T) {
 	defer srv.Close()
 
 	tw := &Twilio{url: srv.URL, accountSID: "AC1", authToken: "secret", from: "+1500", to: []string{"+1501", "+1502"}}
-	require.Equal(t, "twilio", tw.string())
+	require.Equal(t, "twilio", tw.String())
 
-	subject, body := tw.normalize(testHost(), types.DOWN)
+	subject, body := tw.Normalize(testHost(), types.DOWN)
 	require.Equal(t, "❌ Google is DOWN\nhttps://www.google.com", body)
-	require.NoError(t, tw.send("evt", subject, body))
+	require.NoError(t, tw.Send(context.Background(), "evt", subject, body))
 	require.Equal(t, 2, srv.count(), "one SMS per recipient")
 
 	r := srv.last()
@@ -258,7 +259,7 @@ func TestTwilio(t *testing.T) {
 		bad := newCapture(http.StatusUnauthorized)
 		defer bad.Close()
 		tw := &Twilio{url: bad.URL, accountSID: "AC1", authToken: "x", from: "+1500", to: []string{"+1501", "+1502"}}
-		err := tw.send("evt", "s", "b")
+		err := tw.Send(context.Background(), "evt", "s", "b")
 		require.Error(t, err)
 		require.Equal(t, 2, bad.count())
 		require.Contains(t, err.Error(), "+1501")
@@ -266,28 +267,10 @@ func TestTwilio(t *testing.T) {
 	})
 }
 
-func TestNew_Providers(t *testing.T) {
-	cfg := &types.Cfg{Notifications: types.Notifications{
-		Webhook:    &types.Webhook{URL: "http://w"},
-		Discord:    &types.Discord{WebhookURL: "http://d"},
-		Teams:      &types.Teams{WebhookURL: "http://t"},
-		Mattermost: &types.Mattermost{WebhookURL: "http://m"},
-		Pushover:   &types.Pushover{Token: "t", User: "u"},
-		Ntfy:       &types.Ntfy{Topic: "endpoll"},
-		Twilio:     &types.Twilio{AccountSID: "a", AuthToken: "b", From: "c", To: []string{"d"}},
-	}}
-	n, err := New(cfg)
-	require.NoError(t, err)
-
-	names := []string{}
-	for _, c := range n.clients {
-		names = append(names, c.string())
-	}
-	require.Equal(t, []string{"webhook", "discord", "teams", "mattermost", "pushover", "ntfy", "twilio"}, names)
-
-	ntfy := n.clients[5].(*Ntfy)
-	require.Equal(t, "https://ntfy.sh", ntfy.url)
-	require.Equal(t, 3, ntfy.priority)
+func TestNewNtfy(t *testing.T) {
+	n := NewNtfy(&types.Ntfy{Topic: "endpoll"})
+	require.Equal(t, "https://ntfy.sh", n.url)
+	require.Equal(t, 3, n.priority)
 }
 
 func TestNotifications_Validate(t *testing.T) {

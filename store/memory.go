@@ -12,6 +12,7 @@ import (
 type Memory struct {
 	history   map[string]map[time.Time]*types.HttpResponse
 	incidents map[string][]*types.Incident
+	sequence  map[string]int
 	sync.RWMutex
 }
 
@@ -19,6 +20,7 @@ func NewMemory(ctx context.Context) *Memory {
 	return &Memory{
 		history:   make(map[string]map[time.Time]*types.HttpResponse),
 		incidents: make(map[string][]*types.Incident),
+		sequence:  make(map[string]int),
 	}
 }
 func (m *Memory) Close() error {
@@ -33,7 +35,7 @@ func (m *Memory) AddResponse(ctx context.Context, hostID string, r *types.HttpRe
 		m.history[hostID] = make(map[time.Time]*types.HttpResponse)
 	}
 
-	m.history[hostID][r.Timestamp.UTC()] = r
+	m.history[hostID][r.Timestamp.UTC()] = copyResponse(r)
 	return nil
 }
 func (m *Memory) DeleteResponse(ctx context.Context, hostID string, keys []time.Time) error {
@@ -45,12 +47,7 @@ func (m *Memory) DeleteResponse(ctx context.Context, hostID string, keys []time.
 	}
 
 	for _, key := range keys {
-		for ts := range m.history[hostID] {
-			if ts == key.UTC() {
-				delete(m.history[hostID], ts)
-				break
-			}
-		}
+		delete(m.history[hostID], key.UTC())
 	}
 
 	return nil
@@ -65,7 +62,7 @@ func (m *Memory) FindResponses(ctx context.Context, hostID string) ([]*types.Htt
 
 	res := make([]*types.HttpResponse, 0, len(m.history[hostID]))
 	for _, r := range m.history[hostID] {
-		res = append(res, r)
+		res = append(res, copyResponse(r))
 	}
 	sort.Slice(res, func(i, j int) bool {
 		return res[i].Timestamp.Before(res[j].Timestamp)
@@ -88,7 +85,34 @@ func (m *Memory) LastResponse(ctx context.Context, hostID string) (*types.HttpRe
 		}
 	}
 
-	return last, nil
+	return copyResponse(last), nil
+}
+
+func (m *Memory) AggregateResponses(ctx context.Context, hostID string, day time.Time) error {
+	m.Lock()
+	defer m.Unlock()
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	end := day.AddDate(0, 0, 1)
+	responses := make([]*types.HttpResponse, 0)
+	for ts, r := range m.history[hostID] {
+		if !ts.Before(day) && ts.Before(end) {
+			responses = append(responses, r)
+		}
+	}
+	if len(responses) == 0 {
+		return nil
+	}
+
+	aggregation := AggregateDay(day, responses)
+	for _, r := range responses {
+		delete(m.history[hostID], r.Timestamp.UTC())
+	}
+	m.history[hostID][day.UTC()] = aggregation
+	return nil
 }
 
 func (m *Memory) Hosts(ctx context.Context) ([]string, error) {
@@ -111,8 +135,9 @@ func (m *Memory) AddIncident(ctx context.Context, hostID string, e *types.Incide
 		m.incidents[hostID] = make([]*types.Incident, 0)
 	}
 
-	e.ID = len(m.incidents[hostID]) + 1
-	m.incidents[hostID] = append(m.incidents[hostID], e)
+	m.sequence[hostID]++
+	e.ID = m.sequence[hostID]
+	m.incidents[hostID] = append(m.incidents[hostID], copyIncident(e))
 
 	return nil
 }
@@ -161,7 +186,7 @@ func (m *Memory) FindIncidents(ctx context.Context, hostID string, skip, limit i
 
 	res := make([]*types.Incident, 0, len(m.incidents[hostID]))
 	for _, e := range m.incidents[hostID] {
-		res = append(res, e)
+		res = append(res, copyIncident(e))
 	}
 	for i, j := 0, len(res)-1; i < j; i, j = i+1, j-1 {
 		res[i], res[j] = res[j], res[i]
@@ -178,4 +203,31 @@ func (m *Memory) FindIncidents(ctx context.Context, hostID string, skip, limit i
 	}
 
 	return res, nil
+}
+
+func copyResponse(r *types.HttpResponse) *types.HttpResponse {
+	if r == nil {
+		return nil
+	}
+
+	res := *r
+	if r.Bytes != nil {
+		res.Bytes = append([]byte{}, r.Bytes...)
+	}
+	if r.SSLCertExpiry != nil {
+		ts := *r.SSLCertExpiry
+		res.SSLCertExpiry = &ts
+	}
+
+	return &res
+}
+
+func copyIncident(e *types.Incident) *types.Incident {
+	res := *e
+	if e.EndTS != nil {
+		ts := *e.EndTS
+		res.EndTS = &ts
+	}
+
+	return &res
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/exelban/EndPoll/pkg"
 	"github.com/exelban/EndPoll/types"
 )
 
@@ -19,6 +20,7 @@ type Interface interface {
 	DeleteResponse(ctx context.Context, hostID string, keys []time.Time) error
 	FindResponses(ctx context.Context, hostID string) ([]*types.HttpResponse, error)
 	LastResponse(ctx context.Context, hostID string) (*types.HttpResponse, error)
+	AggregateResponses(ctx context.Context, hostID string, day time.Time) error
 
 	// Hosts returns a list of all hosts that has any responses in the store.
 	Hosts(ctx context.Context) ([]string, error)
@@ -35,13 +37,25 @@ type Interface interface {
 	Close() error
 }
 
-func New(ctx context.Context, typ, path string, cfg *types.Cfg) (Interface, error) {
+func New(ctx context.Context, typ, path string) (Interface, error) {
 	var store Interface
 
 	switch typ {
 	case "memory":
 		store = NewMemory(ctx)
 		log.Printf("[INFO] using memory storage")
+	case "sqlite":
+		if err := os.MkdirAll(path, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create data directory: %w", err)
+		}
+		dbFilePath := fmt.Sprintf("%s/%s", path, "endpoll.sqlite.db")
+		s, err := NewSQLite(ctx, dbFilePath)
+		if err != nil {
+			return nil, err
+		}
+		store = s
+
+		log.Printf("[INFO] using sqlite storage at %s", dbFilePath)
 	default:
 		dbPath := path
 		if err := os.MkdirAll(dbPath, 0755); err != nil {
@@ -62,11 +76,22 @@ func New(ctx context.Context, typ, path string, cfg *types.Cfg) (Interface, erro
 	}
 
 	if err := Aggregate(ctx, store); err != nil {
+		_ = store.Close()
 		return nil, fmt.Errorf("failed to aggregate: %w", err)
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	s := &scheduledStore{
+		Interface: store,
+		cancel:    cancel,
+		done:      make(chan struct{}),
 	}
 
 	tk := time.NewTicker(hoursToMidnight())
 	go func() {
+		defer close(s.done)
+		defer tk.Stop()
+
 		for {
 			select {
 			case <-tk.C:
@@ -77,13 +102,24 @@ func New(ctx context.Context, typ, path string, cfg *types.Cfg) (Interface, erro
 				tk.Reset(nextRun)
 				log.Printf("[INFO] next aggregation in %v", nextRun)
 			case <-ctx.Done():
-				tk.Stop()
 				return
 			}
 		}
 	}()
 
-	return store, nil
+	return s, nil
+}
+
+type scheduledStore struct {
+	Interface
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
+func (s *scheduledStore) Close() error {
+	s.cancel()
+	<-s.done
+	return s.Interface.Close()
 }
 
 func Aggregate(ctx context.Context, s Interface) error {
@@ -96,9 +132,9 @@ func Aggregate(ctx context.Context, s Interface) error {
 	}
 
 	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	today := pkg.StartOfDay(now)
 	for _, hostID := range hosts {
-		days := make(map[time.Time][]*types.HttpResponse)
+		days := make(map[time.Time]bool)
 
 		history, err := s.FindResponses(ctx, hostID)
 		if err != nil {
@@ -106,29 +142,15 @@ func Aggregate(ctx context.Context, s Interface) error {
 		}
 
 		for _, r := range history {
-			if r.Timestamp.After(today) || r.IsAggregated {
+			if !r.Timestamp.Before(today) || r.IsAggregated {
 				continue
 			}
-			y, m, d := r.Timestamp.Date()
-			day := time.Date(y, m, d, 0, 0, 0, 0, r.Timestamp.Location())
-			if _, ok := days[day]; !ok {
-				days[day] = make([]*types.HttpResponse, 0)
-			}
-			days[day] = append(days[day], r)
+			day := pkg.StartOfDay(r.Timestamp)
+			days[day] = true
 		}
 
-		for day, responses := range days {
-			aggregation := AggregateDay(day, responses)
-
-			toDelete := make([]time.Time, 0)
-			for _, r := range responses {
-				toDelete = append(toDelete, r.Timestamp)
-			}
-
-			if err := s.DeleteResponse(ctx, hostID, toDelete); err != nil {
-				return err
-			}
-			if err := s.AddResponse(ctx, hostID, aggregation); err != nil {
+		for day := range days {
+			if err := s.AggregateResponses(ctx, hostID, day); err != nil {
 				return err
 			}
 		}
@@ -142,23 +164,31 @@ func AggregateDay(ts time.Time, responses []*types.HttpResponse) *types.HttpResp
 		Timestamp:    ts,
 		IsAggregated: true,
 		Uptime:       0,
-		Count:        len(responses),
+		Count:        0,
 		Time:         0,
-	}
-	if len(responses) == 0 {
-		aggregation.StatusType = types.Unknown
-		return aggregation
 	}
 
 	for _, r := range responses {
+		if r.IsAggregated {
+			aggregation.Count += r.Count
+			aggregation.Uptime += r.Uptime * float64(r.Count)
+			aggregation.Time += r.Time * time.Duration(r.Count)
+			continue
+		}
+		aggregation.Count++
 		if r.StatusType == types.UP {
 			aggregation.Uptime++
 		}
 		aggregation.Time += r.Time
 	}
 
-	aggregation.Uptime = aggregation.Uptime / float64(len(responses))
-	aggregation.Time = aggregation.Time / time.Duration(len(responses))
+	if aggregation.Count == 0 {
+		aggregation.StatusType = types.Unknown
+		return aggregation
+	}
+
+	aggregation.Uptime = aggregation.Uptime / float64(aggregation.Count)
+	aggregation.Time = aggregation.Time / time.Duration(aggregation.Count)
 
 	if aggregation.Uptime > 0.95 {
 		aggregation.StatusType = types.UP
@@ -174,7 +204,7 @@ func AggregateDay(ts time.Time, responses []*types.HttpResponse) *types.HttpResp
 func GenerateHistory(s Interface, start time.Time, id string) int {
 	ctx := context.Background()
 	now := time.Now()
-	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	day := pkg.StartOfDay(now)
 	count := rand.IntN(10000-3000) + 3000
 	interval := now.Sub(start) / time.Duration(count)
 	today := 0

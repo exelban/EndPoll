@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -12,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSlack_send(t *testing.T) {
+func TestSlack_Send(t *testing.T) {
 	router := http.NewServeMux()
 
 	router.HandleFunc("POST /", func(w http.ResponseWriter, r *http.Request) {
@@ -44,18 +45,18 @@ func TestSlack_send(t *testing.T) {
 		timeout: time.Millisecond * 10,
 	}
 
-	require.NoError(t, slack.send("", "", "test"))
-	require.Error(t, slack.send("", "", "error"))
-	require.Error(t, slack.send("", "", "timeout"))
+	require.NoError(t, slack.Send(context.Background(), "", "", "test"))
+	require.Error(t, slack.Send(context.Background(), "", "", "error"))
+	require.Error(t, slack.Send(context.Background(), "", "", "timeout"))
 }
 
-func TestSlack_normalize(t *testing.T) {
+func TestSlack_Normalize(t *testing.T) {
 	s := &Slack{}
 
 	t.Run("host with name uses name", func(t *testing.T) {
 		name := "My API"
 		host := &types.Host{URL: "http://example.com", Name: &name}
-		subject, body := s.normalize(host, types.UP)
+		subject, body := s.Normalize(host, types.UP)
 		require.Contains(t, subject, "My API")
 		require.Contains(t, body, "UP")
 		require.Contains(t, subject, "✅")
@@ -63,7 +64,7 @@ func TestSlack_normalize(t *testing.T) {
 
 	t.Run("host without name uses URL", func(t *testing.T) {
 		host := &types.Host{URL: "http://example.com"}
-		subject, _ := s.normalize(host, types.DOWN)
+		subject, _ := s.Normalize(host, types.DOWN)
 		require.Contains(t, subject, "http://example.com")
 		require.Contains(t, subject, "❌")
 		require.Contains(t, subject, "DOWN")
@@ -72,17 +73,17 @@ func TestSlack_normalize(t *testing.T) {
 	t.Run("host with empty name uses URL", func(t *testing.T) {
 		empty := ""
 		host := &types.Host{URL: "http://example.com", Name: &empty}
-		subject, _ := s.normalize(host, types.UP)
+		subject, _ := s.Normalize(host, types.UP)
 		require.Contains(t, subject, "http://example.com")
 	})
 }
 
-func TestSlack_string(t *testing.T) {
+func TestSlack_String(t *testing.T) {
 	s := &Slack{}
-	require.Equal(t, "slack", s.string())
+	require.Equal(t, "slack", s.String())
 }
 
-func TestSlack_send_ResponseBodyClosed(t *testing.T) {
+func TestSlack_Send_ResponseBodyClosed(t *testing.T) {
 	router := http.NewServeMux()
 	router.HandleFunc("POST /", func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
@@ -106,10 +107,10 @@ func TestSlack_send_ResponseBodyClosed(t *testing.T) {
 		channel: "test-channel",
 		timeout: time.Second,
 	}
-	require.NoError(t, s.send("", "subject", "body"))
+	require.NoError(t, s.Send(context.Background(), "", "subject", "body"))
 }
 
-func TestSlack_send_NonOkResponse(t *testing.T) {
+func TestSlack_Send_NonOkResponse(t *testing.T) {
 	router := http.NewServeMux()
 	router.HandleFunc("POST /", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -124,7 +125,7 @@ func TestSlack_send_NonOkResponse(t *testing.T) {
 		channel: "test",
 		timeout: time.Second,
 	}
-	err := s.send("", "subject", "body")
+	err := s.Send(context.Background(), "", "subject", "body")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "non-ok")
 }

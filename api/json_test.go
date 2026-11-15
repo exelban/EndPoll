@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/exelban/EndPoll/pkg/monitor"
+	"github.com/exelban/EndPoll/internal/monitor"
 	"github.com/exelban/EndPoll/store"
 	"github.com/exelban/EndPoll/types"
 	"github.com/stretchr/testify/require"
@@ -78,7 +78,7 @@ func TestAPI_Hosts(t *testing.T) {
 	require.Equal(t, types.HttpType, h.Type)
 	require.Equal(t, types.UP, h.Status)
 	require.Equal(t, 100, h.Uptime)
-	require.NotNil(t, h.LastCheck)
+	require.False(t, h.LastCheck.IsZero())
 	require.NotNil(t, h.Last)
 	require.Equal(t, 200, h.Last.Code)
 }
@@ -87,7 +87,7 @@ func TestAPI_Host(t *testing.T) {
 	srv, host, shutdown := apiServer(t)
 	defer shutdown()
 
-	var res hostDetailJSON
+	var res hostJSON
 	require.Equal(t, http.StatusOK, getJSON(t, srv.URL+"/api/hosts/"+host.ID, &res))
 	require.Equal(t, host.ID, res.ID)
 	require.NotNil(t, res.Details)
@@ -105,6 +105,42 @@ func TestAPI_Host(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, getJSON(t, srv.URL+"/api/hosts/nope/response-time", &e))
 }
 
+func TestAPI_HostWithoutChecks(t *testing.T) {
+	ctx := context.Background()
+	interval := time.Hour
+	host := &types.Host{
+		ID: "test", URL: "https://user:secret@example.com", Type: types.HttpType,
+		Interval: &interval, InitialDelay: &interval,
+	}
+	m := &monitor.Monitor{Store: store.NewMemory(ctx)}
+	require.NoError(t, m.Run(ctx, &types.Cfg{Hosts: []*types.Host{host}}))
+	defer m.Stop()
+
+	rest := &Rest{Monitor: m}
+	router := rest.Router()
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/hosts", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	require.JSONEq(t, `{
+		"status": "unknown",
+		"hosts": [{
+			"id": "test", "url": "https://user:*****@example.com",
+			"type": "http", "status": "unknown", "uptime": 0
+		}]
+	}`, w.Body.String())
+
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/hosts/test", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	var res map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &res))
+	require.NotContains(t, res, "lastCheck")
+	require.NotContains(t, res, "last")
+	require.Contains(t, res, "details")
+	require.JSONEq(t, `[]`, string(res["history"]))
+	require.JSONEq(t, `[]`, string(res["incidents"]))
+}
+
 func TestAPI_Incidents(t *testing.T) {
 	srv, _, shutdown := apiServer(t)
 	defer shutdown()
@@ -115,6 +151,48 @@ func TestAPI_Incidents(t *testing.T) {
 	require.Equal(t, http.StatusOK, getJSON(t, srv.URL+"/api/incidents", &res))
 	require.NotNil(t, res.Incidents)
 	require.Empty(t, res.Incidents)
+}
+
+func TestAPI_IncidentsOrder(t *testing.T) {
+	ctx := context.Background()
+	interval := time.Hour
+	hosts := []*types.Host{
+		{ID: "first", URL: "https://first.example.com", Interval: &interval, InitialDelay: &interval, Index: 0},
+		{ID: "second", URL: "https://second.example.com", Interval: &interval, InitialDelay: &interval, Index: 1},
+	}
+	now := time.Now()
+	s := store.NewMemory(ctx)
+	require.NoError(t, s.AddIncident(ctx, "first", &types.Incident{StartTS: now.Add(-2 * time.Hour)}))
+	require.NoError(t, s.AddIncident(ctx, "first", &types.Incident{StartTS: now.Add(-time.Hour)}))
+	require.NoError(t, s.AddIncident(ctx, "second", &types.Incident{StartTS: now.Add(-time.Hour)}))
+	require.NoError(t, s.AddIncident(ctx, "second", &types.Incident{StartTS: now.Add(-3 * time.Hour)}))
+
+	m := &monitor.Monitor{Store: s}
+	require.NoError(t, m.Run(ctx, &types.Cfg{Hosts: hosts}))
+	defer m.Stop()
+
+	rest := &Rest{Monitor: m}
+	w := httptest.NewRecorder()
+	rest.Router().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/incidents", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	var res struct {
+		Incidents []incidentJSON `json:"incidents"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &res))
+	want := []struct {
+		hostID string
+		id     int
+	}{
+		{hostID: "first", id: 2},
+		{hostID: "second", id: 1},
+		{hostID: "first", id: 1},
+		{hostID: "second", id: 2},
+	}
+	require.Len(t, res.Incidents, len(want))
+	for i, e := range want {
+		require.Equal(t, e.hostID, res.Incidents[i].HostID)
+		require.Equal(t, e.id, res.Incidents[i].ID)
+	}
 }
 
 func TestAPI_Metrics(t *testing.T) {

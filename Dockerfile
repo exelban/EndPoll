@@ -18,5 +18,5 @@ LABEL org.opencontainers.image.source="https://github.com/exelban/EndPoll"
 EXPOSE 8822
 WORKDIR /app
 COPY --from=build-app /app/bin/main /app/main
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 CMD wget -qO- http://localhost:8822/ping || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 CMD wget -qO- http://localhost:8822/healthz || exit 1
 ENTRYPOINT ["./main"]

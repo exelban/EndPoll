@@ -8,8 +8,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/exelban/EndPoll/pkg/html"
-	"github.com/exelban/EndPoll/pkg/monitor"
+	"github.com/exelban/EndPoll/internal/html"
+	"github.com/exelban/EndPoll/internal/monitor"
 	"github.com/exelban/EndPoll/types"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/css"
@@ -37,7 +37,7 @@ func (s *Rest) Router() *http.ServeMux {
 	s.minify.AddFunc("image/svg+xml", svg.Minify)
 	s.minify.AddFunc("application/javascript", js.Minify)
 
-	router := NewRouter(Recoverer, CORS, Ping(), Auth(s.basicAuth), Info("EndPoll", s.Version))
+	router := NewRouter(Recoverer, CORS, Health(), Auth(s.basicAuth), Info("EndPoll", s.Version))
 
 	router.HandleFunc("GET /", s.public)
 	router.HandleFunc("GET /{id}", s.public)
@@ -90,7 +90,7 @@ func (s *Rest) public(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var buf bytes.Buffer
-	if err := s.Templates.Public.Execute(&buf, data); err != nil {
+	if err := s.Templates.Execute(&buf, "public.html", data); err != nil {
 		log.Printf("[ERROR] generate public html: %v", err)
 		http.Error(w, fmt.Sprintf("error generate public html: %v", err), http.StatusInternalServerError)
 		return
@@ -109,7 +109,7 @@ func (s *Rest) public(w http.ResponseWriter, r *http.Request) {
 
 func (s *Rest) notFound(w http.ResponseWriter, r *http.Request) {
 	var buf bytes.Buffer
-	if err := s.Templates.NotFound.Execute(&buf, nil); err != nil {
+	if err := s.Templates.Execute(&buf, "404.html", nil); err != nil {
 		log.Printf("[ERROR] generate public html: %v", err)
 		http.Error(w, fmt.Sprintf("error generate not found html: %v", err), http.StatusInternalServerError)
 		return

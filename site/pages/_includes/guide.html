@@ -1,0 +1,21 @@
+---
+layout: base.html
+---
+<article class="guide container">
+  <nav class="guide-nav" aria-label="Documentation">
+    <a href="/docs/docker"{% if canonicalPath == '/docs/docker' %} aria-current="page"{% endif %}>Docker installation</a>
+    <a href="/docs/monitoring"{% if canonicalPath == '/docs/monitoring' %} aria-current="page"{% endif %}>Monitoring</a>
+    <a href="/docs/notifications"{% if canonicalPath == '/docs/notifications' %} aria-current="page"{% endif %}>Notifications</a>
+  </nav>
+
+  <h1>{{ heading | escape }}</h1>
+  <p class="guide-intro">{{ intro | escape }}</p>
+
+  <div class="guide-content">
+    {{ content }}
+  </div>
+
+  <div class="guide-footer">
+    <a href="https://github.com/exelban/EndPoll#readme" target="_blank" rel="noopener noreferrer" class="text-link">Full configuration reference on GitHub</a>
+  </div>
+</article>

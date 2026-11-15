@@ -65,13 +65,13 @@ func TestCORS(t *testing.T) {
 	})
 }
 
-func TestPing(t *testing.T) {
-	t.Run("default path /ping", func(t *testing.T) {
-		handler := Ping()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestHealth(t *testing.T) {
+	t.Run("default path /healthz", func(t *testing.T) {
+		handler := Health()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 		}))
 
-		req := httptest.NewRequest("GET", "/ping", nil)
+		req := httptest.NewRequest("GET", "/healthz", nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 
@@ -80,7 +80,7 @@ func TestPing(t *testing.T) {
 	})
 
 	t.Run("custom path", func(t *testing.T) {
-		handler := Ping("/health")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler := Health("/health")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 		}))
 
@@ -91,26 +91,28 @@ func TestPing(t *testing.T) {
 		require.Equal(t, "ok", rr.Body.String())
 	})
 
-	t.Run("non-ping path passes through", func(t *testing.T) {
-		handler := Ping()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	t.Run("non-health path passes through", func(t *testing.T) {
+		handler := Health()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("real handler"))
 		}))
 
-		req := httptest.NewRequest("GET", "/api/data", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
+		for _, path := range []string{"/api/data", "/ping"} {
+			req := httptest.NewRequest("GET", path, nil)
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
 
-		require.Equal(t, http.StatusOK, rr.Code)
-		require.Equal(t, "real handler", rr.Body.String())
+			require.Equal(t, http.StatusOK, rr.Code)
+			require.Equal(t, "real handler", rr.Body.String())
+		}
 	})
 
 	t.Run("multiple paths", func(t *testing.T) {
-		handler := Ping("/ping", "/health", "/ready")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler := Health("/healthz", "/health", "/ready")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 		}))
 
-		for _, path := range []string{"/ping", "/health", "/ready"} {
+		for _, path := range []string{"/healthz", "/health", "/ready"} {
 			req := httptest.NewRequest("GET", path, nil)
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)

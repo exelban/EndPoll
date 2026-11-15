@@ -1,0 +1,80 @@
+---
+layout: "guide.html"
+title: "Install a Self-Hosted Status Page with Docker | EndPoll"
+description: "Install EndPoll with Docker or Docker Compose. Configure service checks, persist uptime history, protect your status page, and update your installation."
+canonicalPath: "/docs/docker"
+heading: "Install EndPoll with Docker"
+intro: "Run a self-hosted status page with persistent uptime history using Docker or Docker Compose. No separate database service is required."
+---
+<h2 id="configuration">1. Create your monitoring configuration</h2>
+<p>Install Docker on a Linux amd64 or arm64 machine, or use Docker Desktop. Choose a directory for EndPoll and create a <code>config.yaml</code> file before starting the container:</p>
+<pre><code>hosts:
+  - name: Website
+    url: https://example.com
+  - name: API
+    url: https://api.example.com/health
+    conditions:
+      code: [200]</code></pre>
+<p>Replace these URLs with services reachable from your Docker host. EndPoll checks hosts every 30 seconds by default. The <a href="/docs/monitoring">monitoring guide</a> explains intervals, timeouts, and database checks.</p>
+
+<h2 id="docker">2. Start EndPoll</h2>
+<p>Run this command from the directory containing your config file:</p>
+<pre><code>docker run -d \
+  --name endpoll \
+  --restart unless-stopped \
+  -p 8822:8822 \
+  -v ./config.yaml:/app/config.yaml \
+  -v ./data:/app/data \
+  exelban/endpoll:latest</code></pre>
+<p>Open <code>http://localhost:8822</code>, or use your server's address if Docker runs on another machine. The <code>data</code> mount keeps your BoltDB monitoring history when the container is replaced.</p>
+<p>Images are available on <a href="https://hub.docker.com/r/exelban/endpoll" target="_blank" rel="noopener noreferrer">Docker Hub</a> and the <a href="https://github.com/users/exelban/packages/container/package/endpoll" target="_blank" rel="noopener noreferrer">GitHub Container Registry</a>. To use the latter, replace the image with <code>ghcr.io/exelban/endpoll:latest</code>. Both registries publish Linux amd64 and arm64 images.</p>
+
+<h2 id="compose">Use Docker Compose</h2>
+<p>As an alternative to <code>docker run</code>, save this as <code>compose.yaml</code> next to your configuration:</p>
+<pre><code>services:
+  endpoll:
+    image: exelban/endpoll:latest
+    container_name: endpoll
+    restart: unless-stopped
+    ports:
+      - "8822:8822"
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./data:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8822/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s</code></pre>
+<p>Start the service and check its logs:</p>
+<pre><code>docker compose up -d
+docker compose logs -f endpoll</code></pre>
+<p>The <code>/healthz</code> endpoint reports that EndPoll is running. It does not report whether all monitored services are healthy; use the dashboard or <code>/api/hosts</code> for that.</p>
+
+<h2 id="storage">Keep your uptime history</h2>
+<p>EndPoll uses embedded BoltDB storage by default and shows a 90-day uptime chart. Keep the <code>./data:/app/data</code> mount when updating or recreating a container. No external database is needed.</p>
+<p>For temporary monitoring, set <code>STORAGE_TYPE=memory</code> in the container environment. In-memory history is lost when EndPoll stops.</p>
+
+<h2 id="private-dashboard">Protect a private status page</h2>
+<p>Add basic authentication to <code>config.yaml</code> if the dashboard should require credentials:</p>
+<pre><code>ui:
+  title: My Status Page
+  basicAuth:
+    username: admin
+    password: replace-with-a-strong-password</code></pre>
+<p>This protects the dashboard, JSON API, and Prometheus metrics. The <code>/healthz</code> endpoint stays unauthenticated for health checks. Place EndPoll behind an HTTPS reverse proxy before sending credentials over the internet. If the proxy runs on the same host, bind the container to <code>127.0.0.1:8822:8822</code> so it is not exposed directly.</p>
+
+<h2 id="updates">Update your installation</h2>
+<p>With Docker Compose, pull the image and recreate the service while retaining your mounted config and data:</p>
+<pre><code>docker compose pull
+docker compose up -d</code></pre>
+<p>You can pin an available release tag instead of <code>latest</code> to control upgrades. Review the <a href="https://github.com/exelban/EndPoll/releases" target="_blank" rel="noopener noreferrer">release notes</a> before updating.</p>
+
+<h2 id="next-steps">Configure checks and alerts</h2>
+<p>EndPoll watches the configuration file for changes. Add your services using the <a href="/docs/monitoring">HTTP and database monitoring guide</a>, then connect <a href="/docs/notifications">Slack, Telegram, or email notifications</a> to receive status changes.</p>

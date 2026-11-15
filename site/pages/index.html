@@ -1,0 +1,348 @@
+---
+title: "EndPoll — Self-Hosted Status Page & Uptime Monitoring"
+description: "Monitor your services with EndPoll, a free, open-source status page. Self-host with Docker, track 90 days of uptime, and receive downtime alerts."
+canonicalPath: "/"
+script: "/assets/js/status-demo.js"
+---
+<!-- Hero -->
+<section class="section hero">
+  <div class="container centered">
+    <h1 class="hero-title">
+      Self-hosted status page<br />and uptime monitoring
+    </h1>
+    <p class="hero-intro">
+      Free, open-source monitoring for your websites, APIs, databases, and network services.
+      Deploy with Docker, track 90 days of uptime, and get notified when a service goes down or recovers.
+    </p>
+    <div class="actions hero-actions">
+      <a href="/docs/docker" class="button button-primary">
+        Get started
+      </a>
+      <a href="https://app.endpoll.com" target="_blank" rel="noopener noreferrer" class="button">
+        Live demo
+      </a>
+      <a href="https://github.com/exelban/EndPoll" target="_blank" rel="noopener noreferrer" class="button">
+        <svg class="icon icon-small" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+        GitHub
+      </a>
+    </div>
+
+    <div class="status-demo" role="img" aria-label="Example status page showing an API server and 90 days of uptime history">
+      <div class="status-header">
+        <div class="status-host">
+          <span class="status-name">API Server</span>
+          <span class="status-address">api.example.com</span>
+        </div>
+        <span class="status-label">up</span>
+      </div>
+      <div class="status-bars" aria-hidden="true">
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="down"></span>
+        <span class="status-bar" data-status="degraded"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="degraded"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+        <span class="status-bar" data-status="up"></span>
+      </div>
+      <div class="status-legend">
+        <span>90 days ago</span>
+        <span>99.8% uptime</span>
+        <span>Today</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Quick start -->
+<section class="section section-white">
+  <div class="container">
+    <h2 class="section-title centered">Run your status page with Docker</h2>
+    <p class="section-intro centered">One config file. One command.</p>
+
+    <div class="quick-start-grid">
+      <div>
+        <p class="code-label">config.yaml</p>
+        <pre class="code-block"><code>hosts:
+  - name: Google
+    url: https://www.google.com
+  - name: GitHub API
+    url: https://api.github.com
+    conditions:
+      code: [200]</code></pre>
+      </div>
+      <div>
+        <p class="code-label">Docker</p>
+        <pre class="code-block"><code>docker run -d \
+  -p 8822:8822 \
+  -v ./config.yaml:/app/config.yaml \
+  -v ./data:/app/data \
+  exelban/endpoll:latest</code></pre>
+        <p class="code-note">
+          Open <span class="monospace">http://localhost:8822</span>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section class="section">
+  <div class="container">
+    <h2 class="section-title section-title-spaced centered">Features</h2>
+
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-blue" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 0 1 9-9"/></svg>
+        </div>
+        <h3>Service checks</h3>
+        <p>Monitor HTTP/HTTPS, TCP, DNS, ICMP, MongoDB, Redis, PostgreSQL, and MySQL from one place.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-green" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <h3>90-day history</h3>
+        <p>Track uptime, response times, and incidents for every service.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-purple" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        </div>
+        <h3>Notifications</h3>
+        <p>Get downtime and recovery alerts through Slack, Telegram, email, and other providers.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-cyan" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </div>
+        <h3>Simple configuration</h3>
+        <p>Manage hosts and groups in YAML or JSON. Changes apply automatically, without a restart.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Docker Compose -->
+<section class="section section-white">
+  <div class="container">
+    <h2 class="section-title centered">Deploy EndPoll with Docker Compose</h2>
+    <p class="section-intro centered">Copy, paste, and you're done.</p>
+
+    <pre class="code-block compose-code"><code>services:
+  endpoll:
+    image: exelban/endpoll:latest
+    container_name: endpoll
+    restart: unless-stopped
+    ports:
+      - "8822:8822"
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8822/healthz"]
+      interval: 10s
+      timeout: 10s
+      retries: 3</code></pre>
+
+    <div class="registry-links">
+      <a href="https://hub.docker.com/r/exelban/endpoll" target="_blank" rel="noopener noreferrer" class="registry-link text-link">
+        <svg class="icon icon-small icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        Docker Hub
+      </a>
+      <a href="https://github.com/users/exelban/packages/container/package/endpoll" target="_blank" rel="noopener noreferrer" class="registry-link text-link">
+        <svg class="icon icon-small icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        GitHub Container Registry
+      </a>
+      <span class="registry-link">
+        <svg class="icon icon-small icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        linux/amd64 &amp; arm64
+      </span>
+    </div>
+  </div>
+</section>
+
+<!-- Guides -->
+<section class="section">
+  <div class="container container-wide">
+    <h2 class="section-title centered">Set up your self-hosted monitoring</h2>
+    <p class="section-intro section-intro-spaced centered">Practical guides, from the first check to downtime alerts.</p>
+
+    <div class="guide-grid">
+      <div class="guide-card">
+        <h3 class="guide-card-title"><a href="/docs/docker" class="text-link">Docker installation guide</a></h3>
+        <p class="card-description">Create a config, persist your uptime history, and run EndPoll with Docker or Docker Compose.</p>
+      </div>
+      <div class="guide-card">
+        <h3 class="guide-card-title"><a href="/docs/monitoring" class="text-link">HTTP and database monitoring</a></h3>
+        <p class="card-description">Configure health checks, status thresholds, network checks, and Prometheus metrics.</p>
+      </div>
+      <div class="guide-card">
+        <h3 class="guide-card-title"><a href="/docs/notifications" class="text-link">Slack, Telegram, and email alerts</a></h3>
+        <p class="card-description">Connect notification providers, choose channels per host, and control repeated alerts.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="section section-white">
+  <div class="container">
+    <h2 class="section-title section-title-spaced centered">Frequently asked questions</h2>
+
+    <div class="faq-list">
+      <div>
+        <h3 class="faq-title">Is EndPoll free and open source?</h3>
+        <p class="faq-answer">Yes. EndPoll is released under the MIT license. You can run it on your own infrastructure without an EndPoll account or subscription. You provide the server and any notification services you choose.</p>
+      </div>
+      <div>
+        <h3 class="faq-title">What can I monitor?</h3>
+        <p class="faq-answer">EndPoll checks websites and APIs over HTTP/HTTPS, MongoDB, Redis, PostgreSQL, MySQL, TCP ports, DNS records, and hosts via ICMP ping. HTTPS checks also track TLS certificate expiry. See the <a href="/docs/monitoring" class="text-link text-link-dark">monitoring configuration guide</a> for examples.</p>
+      </div>
+      <div>
+        <h3 class="faq-title">Where is monitoring history stored?</h3>
+        <p class="faq-answer">History is stored locally in an embedded BoltDB database by default, with a 90-day uptime chart for each host. Mount the data directory when running Docker to keep history across container replacements. In-memory storage is available when persistence is not needed.</p>
+      </div>
+      <div>
+        <h3 class="faq-title">What do I need to host EndPoll?</h3>
+        <p class="faq-answer">Use a machine with Docker and network access to the services you want to check. Container images support Linux on amd64 and arm64. You can also build the Go application from source. Follow the <a href="/docs/docker" class="text-link text-link-dark">Docker installation guide</a> to get started.</p>
+      </div>
+      <div>
+        <h3 class="faq-title">Can I keep my status page private?</h3>
+        <p class="faq-answer">Yes. Configure <code class="inline-code">ui.basicAuth</code> to require a username and password for the dashboard and API. The health check at <code class="inline-code">/healthz</code> stays public. Use HTTPS when accessing an authenticated dashboard over the internet.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="section call-to-action">
+  <div class="container container-small centered">
+    <h2 class="call-to-action-title">Start monitoring in minutes</h2>
+    <p class="section-intro">Free. Open source. Self-hosted. No account required.</p>
+    <div class="actions">
+      <a href="https://app.endpoll.com" target="_blank" rel="noopener noreferrer" class="button button-primary">
+        Live demo
+      </a>
+      <a href="/docs/docker" class="button">
+        Read the docs
+      </a>
+    </div>
+  </div>
+</section>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "@id": "https://endpoll.com/#software",
+  "name": "EndPoll",
+  "url": "https://endpoll.com/",
+  "description": "Monitor your services with EndPoll, a free, open-source status page. Self-host with Docker, track 90 days of uptime, and receive downtime alerts.",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Linux",
+  "image": "https://endpoll.com/social-preview.png",
+  "license": "https://github.com/exelban/EndPoll/blob/master/LICENSE",
+  "downloadUrl": "https://hub.docker.com/r/exelban/endpoll",
+  "sameAs": [
+    "https://github.com/exelban/EndPoll"
+  ],
+  "isAccessibleForFree": true,
+  "offers": {
+    "@type": "Offer",
+    "price": 0,
+    "priceCurrency": "USD"
+  },
+  "author": {
+    "@type": "Person",
+    "name": "Serhiy Mytrovtsiy",
+    "url": "https://github.com/exelban"
+  }
+}
+</script>

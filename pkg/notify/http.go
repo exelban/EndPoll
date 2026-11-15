@@ -2,6 +2,7 @@ package notify
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -37,7 +38,7 @@ func request(client *http.Client, req *http.Request) error {
 }
 
 // postJSON - sends the payload as a JSON document
-func postJSON(client *http.Client, method, target string, headers map[string]string, payload any) error {
+func postJSON(ctx context.Context, client *http.Client, method, target string, headers map[string]string, payload any) error {
 	b, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal payload: %w", err)
@@ -46,7 +47,7 @@ func postJSON(client *http.Client, method, target string, headers map[string]str
 		method = http.MethodPost
 	}
 
-	req, err := http.NewRequest(method, target, bytes.NewReader(b))
+	req, err := http.NewRequestWithContext(ctx, method, target, bytes.NewReader(b))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
@@ -59,8 +60,8 @@ func postJSON(client *http.Client, method, target string, headers map[string]str
 }
 
 // postForm - sends the values as an url-encoded form
-func postForm(client *http.Client, target string, headers map[string]string, values url.Values) error {
-	req, err := http.NewRequest(http.MethodPost, target, strings.NewReader(values.Encode()))
+func postForm(ctx context.Context, client *http.Client, target string, headers map[string]string, values url.Values) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, strings.NewReader(values.Encode()))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
@@ -97,5 +98,26 @@ func plainMessage(host *types.Host, status types.StatusType) (subject, text stri
 	subject = fmt.Sprintf("%s %s is %s", icon, hostName(host), s)
 	text = fmt.Sprintf("%s %s has a new status: %s", icon, host.String(), s)
 
+	return subject, text
+}
+
+// codeMessage - formats the host as inline code for Slack and Telegram.
+func codeMessage(host *types.Host, status types.StatusType) (string, string) {
+	icon := statusIcon(status)
+	name := host.URL
+	if host.Name != nil && *host.Name != "" {
+		name = *host.Name
+	}
+
+	text := fmt.Sprintf("%s: `%s` has a new status: %s", icon, host.String(), strings.ToUpper(string(status)))
+	subject := fmt.Sprintf("%s: %s is %s", icon, name, strings.ToUpper(string(status)))
+
+	return subject, text
+}
+
+// boldMessage - formats the subject in bold for Discord and Mattermost.
+func boldMessage(host *types.Host, status types.StatusType) (string, string) {
+	subject, _ := plainMessage(host, status)
+	text := "**" + subject + "**\n" + host.SecureURL()
 	return subject, text
 }

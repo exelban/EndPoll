@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"slices"
 )
 
 // Middleware type for middleware functions
@@ -11,7 +12,6 @@ type Middleware func(http.Handler) http.Handler
 type Router struct {
 	mux         *http.ServeMux
 	middlewares []Middleware
-	patterns    []string
 }
 
 // NewRouter creates and returns a new App with an initialized ServeMux and middleware slice
@@ -34,10 +34,9 @@ func (r *Router) HandleFunc(pattern string, handler http.HandlerFunc) {
 
 // Handle registers a handler for a specific route, applying all middleware.
 func (r *Router) Handle(pattern string, handler http.Handler) {
-	r.patterns = append(r.patterns, pattern)
 	finalHandler := handler
-	for i := len(r.middlewares) - 1; i >= 0; i-- {
-		finalHandler = r.middlewares[i](finalHandler)
+	for _, v := range slices.Backward(r.middlewares) {
+		finalHandler = v(finalHandler)
 	}
 	r.mux.Handle(pattern, finalHandler)
 }

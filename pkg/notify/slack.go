@@ -2,6 +2,7 @@ package notify
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -19,11 +20,21 @@ type Slack struct {
 	timeout time.Duration
 }
 
-func (s *Slack) string() string {
+// NewSlack - creates a Slack notification provider.
+func NewSlack(cfg *types.Slack) *Slack {
+	return &Slack{
+		url:     "https://slack.com/api/chat.postMessage",
+		token:   cfg.Token,
+		channel: cfg.Channel,
+		timeout: httpTimeout,
+	}
+}
+
+func (s *Slack) String() string {
 	return "slack"
 }
 
-func (s *Slack) send(_, subject, body string) error {
+func (s *Slack) Send(ctx context.Context, _, subject, body string) error {
 	b, _ := json.Marshal(struct {
 		Username string `json:"username,omitempty"`
 		Channel  string `json:"channel,omitempty"`
@@ -33,7 +44,7 @@ func (s *Slack) send(_, subject, body string) error {
 		Text:    body,
 	})
 
-	req, err := http.NewRequest(http.MethodPost, s.url, bytes.NewBuffer(b))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.url, bytes.NewBuffer(b))
 	if err != nil {
 		return err
 	}
@@ -63,19 +74,6 @@ func (s *Slack) send(_, subject, body string) error {
 	return nil
 }
 
-func (s *Slack) normalize(host *types.Host, status types.StatusType) (string, string) {
-	icon := "❌"
-	if status == types.UP {
-		icon = "✅"
-	}
-
-	name := host.URL
-	if host.Name != nil && *host.Name != "" {
-		name = *host.Name
-	}
-
-	text := fmt.Sprintf("%s: `%s` has a new status: %s", icon, host.String(), strings.ToUpper(string(status)))
-	subject := fmt.Sprintf("%s: %s is %s", icon, name, strings.ToUpper(string(status)))
-
-	return subject, text
+func (s *Slack) Normalize(host *types.Host, status types.StatusType) (string, string) {
+	return codeMessage(host, status)
 }

@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/exelban/EndPoll/types"
@@ -14,11 +15,20 @@ type Discord struct {
 	client *http.Client
 }
 
-func (d *Discord) string() string {
+// NewDiscord - creates a Discord notification provider.
+func NewDiscord(cfg *types.Discord) *Discord {
+	return &Discord{
+		url:      cfg.WebhookURL,
+		username: cfg.Username,
+		client:   &http.Client{Timeout: httpTimeout},
+	}
+}
+
+func (d *Discord) String() string {
 	return "discord"
 }
 
-func (d *Discord) send(_, subject, body string) error {
+func (d *Discord) Send(ctx context.Context, _, subject, body string) error {
 	if body == "" {
 		body = subject
 	}
@@ -29,11 +39,9 @@ func (d *Discord) send(_, subject, body string) error {
 		Content:  body,
 		Username: d.username,
 	}
-	return postJSON(d.client, http.MethodPost, d.url, nil, payload)
+	return postJSON(ctx, d.client, http.MethodPost, d.url, nil, payload)
 }
 
-func (d *Discord) normalize(host *types.Host, status types.StatusType) (string, string) {
-	subject, _ := plainMessage(host, status)
-	text := "**" + subject + "**\n" + host.SecureURL()
-	return subject, text
+func (d *Discord) Normalize(host *types.Host, status types.StatusType) (string, string) {
+	return boldMessage(host, status)
 }

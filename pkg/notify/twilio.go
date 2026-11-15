@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -23,11 +24,23 @@ type Twilio struct {
 	client *http.Client
 }
 
-func (t *Twilio) string() string {
+// NewTwilio - creates a Twilio notification provider.
+func NewTwilio(cfg *types.Twilio) *Twilio {
+	return &Twilio{
+		url:        "https://api.twilio.com",
+		accountSID: cfg.AccountSID,
+		authToken:  cfg.AuthToken,
+		from:       cfg.From,
+		to:         cfg.To,
+		client:     &http.Client{Timeout: httpTimeout},
+	}
+}
+
+func (t *Twilio) String() string {
 	return "twilio"
 }
 
-func (t *Twilio) send(_, subject, body string) error {
+func (t *Twilio) Send(ctx context.Context, _, subject, body string) error {
 	if body == "" {
 		body = subject
 	}
@@ -43,15 +56,15 @@ func (t *Twilio) send(_, subject, body string) error {
 			"From": {t.from},
 			"Body": {body},
 		}
-		if err := postForm(t.client, target, headers, values); err != nil {
+		if err := postForm(ctx, t.client, target, headers, values); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", to, err))
 		}
 	}
 	return errors.Join(errs...)
 }
 
-// normalize - an SMS is short: the subject line plus the address
-func (t *Twilio) normalize(host *types.Host, status types.StatusType) (string, string) {
+// Normalize - an SMS is short: the subject line plus the address
+func (t *Twilio) Normalize(host *types.Host, status types.StatusType) (string, string) {
 	subject, _ := plainMessage(host, status)
 	text := subject
 	if host.Name != nil && *host.Name != "" {

@@ -19,7 +19,7 @@ EndPoll is a lightweight, self-hosted status page and monitoring tool. It period
 - **SSL certificate monitoring** — tracks expiry dates for HTTPS hosts
 - **Detailed timing** — DNS, TLS handshake, connect, and TTFB breakdown for HTTP checks
 - **Threshold-based status** — configurable success/failure thresholds to prevent flapping
-- **Lightweight storage** — embedded BoltDB (default) or in-memory
+- **Lightweight storage** — embedded BoltDB (default), SQLite or in-memory
 
 ## Installation
 
@@ -48,19 +48,13 @@ services:
     ports:
       - "8822:8822"
     volumes:
-      - ./config.yaml:/app/config.yaml
-      - ./data:/app/data
+      - ./endpoll/config.yaml:/app/config.yaml
+      - ./endpoll/data:/app/data
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    healthcheck:
-      test: "curl -f http://localhost:8822/ping || exit 1"
-      interval: 10s
-      timeout: 10s
-      retries: 3
-      start_period: 3s
 ```
 
 ### Build from source
@@ -97,18 +91,16 @@ EndPoll is configured via a YAML or JSON file. The file is watched for changes a
 | Flag | Env variable | Default | Description |
 |------|-------------|---------|-------------|
 | `--config-path` | `CONFIG_PATH` | `./config.yaml` | Path to configuration file |
-| `--storage.type` | `STORAGE_TYPE` | `bolt` | Storage backend (`bolt` or `memory`) |
-| `--storage.path` | `STORAGE_PATH` | `./data` | Directory for BoltDB storage |
+| `--storage.type` | `STORAGE_TYPE` | `bolt` | Storage backend (`bolt`, `sqlite` or `memory`) |
+| `--storage.path` | `STORAGE_PATH` | `./data` | Directory for BoltDB or SQLite storage |
 | `--port` | `PORT` | `8822` | HTTP server port |
 | `--debug` | `DEBUG` | `false` | Enable debug logging |
-| `--smtp.host` | `SMTP_HOST` | | SMTP server host |
-| `--smtp.port` | `SMTP_PORT` | `25` | SMTP server port |
-| `--smtp.username` | `SMTP_USERNAME` | | SMTP username |
-| `--smtp.password` | `SMTP_PASSWORD` | | SMTP password |
-| `--smtp.from` | `SMTP_FROM` | | Sender email address |
-| `--smtp.to` | `SMTP_TO` | | Recipient email address(es) |
 
-The `--smtp.*` flags are a fallback: they are used only when the configuration file does not define `notifications.smtp`.
+### Storage
+
+BoltDB is the default storage engine. To use SQLite, run `./endpoll --storage.type=sqlite` or set `STORAGE_TYPE=sqlite` (for Docker, add `-e STORAGE_TYPE=sqlite`). SQLite stores monitoring history and incidents in `endpoll.sqlite.db` inside `--storage.path`, which defaults to `./data`. Keep this directory mounted when running Docker.
+
+Each engine uses its own database file. Switching between BoltDB and SQLite starts a separate history; existing data is not migrated automatically. Use `STORAGE_TYPE=memory` for temporary monitoring without persistence.
 
 ### Config file reference
 
@@ -155,7 +147,7 @@ ui:
     password: "secret"
 ```
 
-When `basicAuth` is set, all pages require credentials. The `/ping` health check endpoint remains unauthenticated.
+When `basicAuth` is set, all pages require credentials. The `/healthz` health check endpoint remains unauthenticated.
 
 #### Connectivity check
 
@@ -252,6 +244,8 @@ notifications:
 Channel names for the per-host `alerts` list: `slack`, `telegram`, `smtp`, `webhook`, `discord`, `teams`, `mattermost`, `pushover`, `ntfy`, `twilio`, `botcomm`.
 
 BotComm sends messages to `https://api.botcomm.app/message` using HTTP Basic authentication. Create a bot in BotComm to get its client ID and client secret, and copy recipient Session IDs from Chat Settings on web or iOS. Keep the secret in your server-side configuration. Empty or whitespace-only Session IDs are rejected. With no Session IDs, messages are broadcast to everyone connected to the bot, including the owner; a `202` response means the broadcast was queued, not delivered. Broadcasts require a backend supporting Basic-auth broadcasts and are limited to one per minute and 24 per day per bot. Sending stops at the first error, so earlier recipients may already have received the message; EndPoll does not automatically retry BotComm requests.
+
+BotComm messages include the alert subject (for example, `❌ Google is DOWN`) above the full message body, for both targeted messages and broadcasts. Startup and shutdown messages use `EndPoll status` as the subject. Subjects are trimmed, control characters and line separators are replaced with spaces, and titles longer than 256 Unicode characters are shortened with an ellipsis to fit BotComm's limit. The body retains the full message. No additional configuration is needed.
 
 The webhook payload of a status change:
 
@@ -435,9 +429,9 @@ hosts:
 | `GET` | `/api/hosts/{id}/response-time` | JSON: average response time per day |
 | `GET` | `/api/incidents` | JSON: recent incidents of every host, newest first |
 | `GET` | `/metrics` | Prometheus metrics |
-| `GET` | `/ping` | Health check (returns `ok`) |
+| `GET` | `/healthz` | Health check (returns `ok`) |
 
-All endpoints except `/ping` are protected by `ui.basicAuth` when it is configured.
+All endpoints except `/healthz` are protected by `ui.basicAuth` when it is configured.
 
 ### JSON API
 

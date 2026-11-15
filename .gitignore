@@ -3,9 +3,9 @@
 config.yaml
 mock_test.go
 *.db
+*.db-shm
+*.db-wal
 .run
 release
 data
 .one
-.claude
-landing

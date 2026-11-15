@@ -12,13 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTelegram_normalize(t *testing.T) {
+func TestTelegram_Normalize(t *testing.T) {
 	tg := &Telegram{}
 
 	t.Run("host with name", func(t *testing.T) {
 		name := "My Service"
 		host := &types.Host{URL: "http://example.com", Name: &name}
-		subject, body := tg.normalize(host, types.UP)
+		subject, body := tg.Normalize(host, types.UP)
 		require.Contains(t, subject, "My Service")
 		require.Contains(t, body, "UP")
 		require.Contains(t, subject, "✅")
@@ -26,7 +26,7 @@ func TestTelegram_normalize(t *testing.T) {
 
 	t.Run("host without name", func(t *testing.T) {
 		host := &types.Host{URL: "http://example.com"}
-		subject, _ := tg.normalize(host, types.DOWN)
+		subject, _ := tg.Normalize(host, types.DOWN)
 		require.Contains(t, subject, "http://example.com")
 		require.Contains(t, subject, "❌")
 	})
@@ -34,14 +34,14 @@ func TestTelegram_normalize(t *testing.T) {
 	t.Run("empty name uses URL", func(t *testing.T) {
 		empty := ""
 		host := &types.Host{URL: "http://example.com", Name: &empty}
-		subject, _ := tg.normalize(host, types.DOWN)
+		subject, _ := tg.Normalize(host, types.DOWN)
 		require.Contains(t, subject, "http://example.com")
 	})
 }
 
-func TestTelegram_string(t *testing.T) {
+func TestTelegram_String(t *testing.T) {
 	tg := &Telegram{}
-	require.Equal(t, "telegram", tg.string())
+	require.Equal(t, "telegram", tg.String())
 }
 
 func TestTelegram_sendToChat(t *testing.T) {
@@ -73,7 +73,7 @@ func TestTelegram_sendToChat(t *testing.T) {
 	})
 }
 
-func TestTelegram_send(t *testing.T) {
+func TestTelegram_Send(t *testing.T) {
 	t.Run("sends to all chat IDs", func(t *testing.T) {
 		received := make(map[string]bool)
 		router := http.NewServeMux()
@@ -97,7 +97,7 @@ func TestTelegram_send(t *testing.T) {
 			chatIDs: []string{"111", "222", "333"},
 			timeout: 10 * time.Second,
 		}
-		require.Equal(t, "telegram", tg.string())
+		require.Equal(t, "telegram", tg.String())
 		require.Len(t, tg.chatIDs, 3)
 		require.Equal(t, 10*time.Second, tg.timeout)
 	})

@@ -19,6 +19,9 @@ func TestStore_AddResponse(t *testing.T) {
 		"memory": func() Interface {
 			return NewMemory(ctx)
 		},
+		"sqlite": func() Interface {
+			return newTestSQLite(t)
+		},
 		"bolt": func() Interface {
 			file, err := os.CreateTemp("", "test.db")
 			require.NoError(t, err)
@@ -52,6 +55,9 @@ func TestStore_ResponseHistory(t *testing.T) {
 	list := map[string]func() Interface{
 		"memory": func() Interface {
 			return NewMemory(ctx)
+		},
+		"sqlite": func() Interface {
+			return newTestSQLite(t)
 		},
 		"bolt": func() Interface {
 			file, err := os.CreateTemp("", "test.db")
@@ -98,6 +104,9 @@ func TestStore_DeleteResponse(t *testing.T) {
 	list := map[string]func() Interface{
 		"memory": func() Interface {
 			return NewMemory(ctx)
+		},
+		"sqlite": func() Interface {
+			return newTestSQLite(t)
 		},
 		"bolt": func() Interface {
 			file, err := os.CreateTemp("", "test.db")
@@ -158,6 +167,9 @@ func TestStore_Hosts(t *testing.T) {
 		"memory": func() Interface {
 			return NewMemory(ctx)
 		},
+		"sqlite": func() Interface {
+			return newTestSQLite(t)
+		},
 		"bolt": func() Interface {
 			file, err := os.CreateTemp("", "test.db")
 			require.NoError(t, err)
@@ -192,6 +204,9 @@ func TestStore_AddEvent(t *testing.T) {
 	list := map[string]func() Interface{
 		"memory": func() Interface {
 			return NewMemory(ctx)
+		},
+		"sqlite": func() Interface {
+			return newTestSQLite(t)
 		},
 		"bolt": func() Interface {
 			file, err := os.CreateTemp("", "test.db")
@@ -237,6 +252,9 @@ func TestStore_FindEvents(t *testing.T) {
 	list := map[string]func() Interface{
 		"memory": func() Interface {
 			return NewMemory(ctx)
+		},
+		"sqlite": func() Interface {
+			return newTestSQLite(t)
 		},
 		"bolt": func() Interface {
 			file, err := os.CreateTemp("", "test.db")
@@ -309,7 +327,7 @@ func TestStore_FindEvents(t *testing.T) {
 func TestStore_aggregation(t *testing.T) {
 	t.Run("one day history", func(t *testing.T) {
 		ctx := context.Background()
-		s, err := New(ctx, "memory", "", &types.Cfg{})
+		s, err := New(ctx, "memory", "")
 		require.NoError(t, err)
 		require.NotNil(t, s)
 
@@ -324,7 +342,7 @@ func TestStore_aggregation(t *testing.T) {
 	})
 	t.Run("random days history back", func(t *testing.T) {
 		ctx := context.Background()
-		s, err := New(ctx, "memory", "", &types.Cfg{})
+		s, err := New(ctx, "memory", "")
 		require.NoError(t, err)
 		require.NotNil(t, s)
 
@@ -340,7 +358,7 @@ func TestStore_aggregation(t *testing.T) {
 	})
 	t.Run("uptime, status and responseTime type per day", func(t *testing.T) {
 		ctx := context.Background()
-		s, err := New(ctx, "memory", "", &types.Cfg{})
+		s, err := New(ctx, "memory", "")
 		require.NoError(t, err)
 		require.NotNil(t, s)
 
@@ -500,6 +518,9 @@ func TestStore_LastResponse(t *testing.T) {
 		"memory": func() Interface {
 			return NewMemory(ctx)
 		},
+		"sqlite": func() Interface {
+			return newTestSQLite(t)
+		},
 		"bolt": func() Interface {
 			file, err := os.CreateTemp("", "test_last_*.db")
 			require.NoError(t, err)
@@ -547,6 +568,9 @@ func TestStore_DeleteIncident(t *testing.T) {
 	stores := map[string]func() Interface{
 		"memory": func() Interface {
 			return NewMemory(ctx)
+		},
+		"sqlite": func() Interface {
+			return newTestSQLite(t)
 		},
 		"bolt": func() Interface {
 			file, err := os.CreateTemp("", "test_delinc_*.db")

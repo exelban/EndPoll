@@ -36,21 +36,28 @@ func TestConfig_NewConfig(t *testing.T) {
 		_, err := file.Write([]byte(`{}`))
 		require.NoError(t, err)
 
-		ctx := context.Background()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		cfg, err := NewConfig(ctx, file.Name())
 		require.NoError(t, err)
 		require.NotNil(t, cfg)
 
-		wait := make(chan bool)
-		go func() {
-			<-cfg.FW
-			wait <- true
-		}()
+		select {
+		case <-cfg.FW:
+		case <-time.After(3 * time.Second):
+			t.Fatal("initial configuration notification was not delivered")
+		}
 
 		_, err = file.Write([]byte(`{"hosts": [{"url": "test"}]}`))
 		require.NoError(t, err)
+		future := time.Now().Add(time.Hour)
+		require.NoError(t, os.Chtimes(file.Name(), future, future))
 
-		<-wait
+		select {
+		case <-cfg.FW:
+		case <-time.After(3 * time.Second):
+			t.Fatal("configuration change was not delivered")
+		}
 	})
 }
 
@@ -329,6 +336,40 @@ func TestConfig_Validate(t *testing.T) {
 }
 
 func TestConfig_Reload(t *testing.T) {
+	t.Run("rejected reload keeps active settings", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "config.yaml")
+		valid := `ui:
+  basicAuth:
+    username: admin
+    password: secret
+hosts:
+  - url: https://example.com
+`
+		require.NoError(t, os.WriteFile(path, []byte(valid), 0600))
+
+		cfg := &Cfg{path: path}
+		require.NoError(t, cfg.Reload())
+		host := cfg.Hosts[0]
+
+		for _, invalid := range []string{
+			"interval: -1s\nhosts: []",
+			"hosts: [null]",
+			"failureThreshold: -1\nhosts:\n  - url: https://example.com",
+			"hosts:\n  - url: https://example.com\n    timeout: 0s",
+			"hosts: [",
+		} {
+			require.NoError(t, os.WriteFile(path, []byte(invalid), 0600))
+			require.Error(t, cfg.Reload())
+			require.Equal(t, &BasicAuth{Username: "admin", Password: "secret"}, cfg.GetUI().BasicAuth)
+			require.Same(t, host, cfg.Hosts[0])
+		}
+
+		require.NoError(t, os.WriteFile(path, []byte("hosts:\n  - url: https://new.example.com\n"), 0600))
+		require.NoError(t, cfg.Reload())
+		require.Nil(t, cfg.GetUI().BasicAuth)
+		require.Equal(t, "https://new.example.com", cfg.Hosts[0].URL)
+	})
+
 	t.Run("json", func(t *testing.T) {
 		jsonFile, _ := os.CreateTemp("/tmp", "*.json")
 		defer func() {
@@ -515,6 +556,32 @@ func TestConfig_Validate_MultipleHosts(t *testing.T) {
 		require.NotEmpty(t, h.ID)
 		require.NotNil(t, h.Interval)
 		require.NotNil(t, h.TimeoutInterval)
+	}
+}
+
+func TestConfig_Validate_DuplicateHosts(t *testing.T) {
+	group := "group"
+	cfg := &Cfg{
+		FileHosts: []*Host{
+			{URL: "https://example.com"},
+			{URL: "https://example.com", Group: &group},
+			{URL: "https://other.example.com"},
+		},
+	}
+	require.NoError(t, cfg.Validate())
+	previous := cfg.Hosts
+	for i, h := range cfg.FileHosts {
+		require.Equal(t, h.GenerateID(), cfg.Hosts[i].ID)
+		require.Equal(t, i, cfg.Hosts[i].Index)
+	}
+
+	name := "duplicate"
+	duplicate := &Host{URL: cfg.FileHosts[0].URL, Name: &name}
+	cfg.FileHosts = append(cfg.FileHosts, duplicate)
+	require.EqualError(t, cfg.Validate(), "duplicate host: "+duplicate.String())
+	require.Len(t, cfg.Hosts, len(previous))
+	for i, h := range previous {
+		require.Same(t, h, cfg.Hosts[i])
 	}
 }
 

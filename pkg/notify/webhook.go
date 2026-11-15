@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -25,11 +26,21 @@ type Webhook struct {
 	client *http.Client
 }
 
-func (w *Webhook) string() string {
+// NewWebhook - creates a Webhook notification provider.
+func NewWebhook(cfg *types.Webhook) *Webhook {
+	return &Webhook{
+		url:     cfg.URL,
+		method:  cfg.Method,
+		headers: cfg.Headers,
+		client:  &http.Client{Timeout: httpTimeout},
+	}
+}
+
+func (w *Webhook) String() string {
 	return "webhook"
 }
 
-func (w *Webhook) send(id, subject, body string) error {
+func (w *Webhook) Send(ctx context.Context, id, subject, body string) error {
 	payload := map[string]any{}
 	if err := json.Unmarshal([]byte(body), &payload); err != nil {
 		payload = map[string]any{
@@ -41,10 +52,10 @@ func (w *Webhook) send(id, subject, body string) error {
 	payload["id"] = id
 	payload["subject"] = subject
 
-	return postJSON(w.client, w.method, w.url, w.headers, payload)
+	return postJSON(ctx, w.client, w.method, w.url, w.headers, payload)
 }
 
-func (w *Webhook) normalize(host *types.Host, status types.StatusType) (string, string) {
+func (w *Webhook) Normalize(host *types.Host, status types.StatusType) (string, string) {
 	subject, _ := plainMessage(host, status)
 
 	h := map[string]any{

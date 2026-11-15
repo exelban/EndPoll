@@ -86,3 +86,23 @@ func TestServer_WildcardAddress(t *testing.T) {
 	require.NoError(t, s.Shutdown())
 	<-errCh
 }
+
+func TestServer_ShutdownBeforeRun(t *testing.T) {
+	s := &Server{}
+	require.NoError(t, s.Shutdown())
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- s.Run(http.NewServeMux())
+	}()
+	t.Cleanup(func() {
+		_ = s.Shutdown()
+	})
+
+	select {
+	case err := <-errCh:
+		require.NoError(t, err)
+	case <-time.After(time.Second):
+		t.Fatal("server started after shutdown")
+	}
+}

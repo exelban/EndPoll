@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/exelban/EndPoll/api"
-	"github.com/exelban/EndPoll/pkg/html"
-	"github.com/exelban/EndPoll/pkg/monitor"
+	"github.com/exelban/EndPoll/internal/html"
+	"github.com/exelban/EndPoll/internal/monitor"
 	"github.com/exelban/EndPoll/store"
 	"github.com/exelban/EndPoll/types"
 	"github.com/jessevdk/go-flags"
@@ -23,18 +23,9 @@ type arguments struct {
 	ConfigPath string `long:"config-path" env:"CONFIG_PATH" default:"./config.yaml" description:"path to the configuration file"`
 
 	Storage struct {
-		Type string `long:"type" env:"TYPE" default:"bolt" description:"storage type"`
+		Type string `long:"type" env:"TYPE" default:"bolt" description:"storage type (bolt, sqlite, memory)"`
 		Path string `long:"path" env:"PATH" default:"./data" description:"storage path"`
 	} `group:"storage" namespace:"storage" env-namespace:"STORAGE"`
-
-	SMTP struct {
-		Host     string   `long:"host" env:"HOST" description:"SMTP host"`
-		Port     int      `long:"port" env:"PORT" default:"25" description:"SMTP port"`
-		Username string   `long:"username" env:"USERNAME" description:"SMTP user"`
-		Password string   `long:"password" env:"PASSWORD" description:"SMTP password"`
-		From     string   `long:"from" env:"FROM" description:"SMTP sender email"`
-		To       []string `long:"to" env:"TO" description:"SMTP receiver email"`
-	} `group:"smtp" namespace:"smtp" env-namespace:"SMTP"`
 
 	Port  int  `long:"port" env:"PORT" default:"8822" description:"service rest port"`
 	Debug bool `long:"debug" env:"DEBUG" description:"debug mode"`
@@ -46,8 +37,6 @@ type app struct {
 
 	config *types.Cfg
 	store  store.Interface
-
-	args arguments
 }
 
 //go:embed templates/*
@@ -97,18 +86,11 @@ func create(ctx context.Context, args arguments) (*app, error) {
 	if err != nil {
 		return nil, fmt.Errorf("new config: %w", err)
 	}
-	if args.SMTP.Host != "" {
-		cfg.DefaultSMTP = &types.SMTP{
-			Host:     args.SMTP.Host,
-			Port:     args.SMTP.Port,
-			Username: args.SMTP.Username,
-			Password: args.SMTP.Password,
-			From:     args.SMTP.From,
-			To:       args.SMTP.To,
-		}
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("validate config: %w", err)
 	}
 
-	storage, err := store.New(ctx, args.Storage.Type, args.Storage.Path, cfg)
+	storage, err := store.New(ctx, args.Storage.Type, args.Storage.Path)
 	if err != nil {
 		return nil, fmt.Errorf("new store: %w", err)
 	}
@@ -132,14 +114,21 @@ func create(ctx context.Context, args arguments) (*app, error) {
 		},
 		config: cfg,
 		store:  storage,
-
-		args: args,
 	}, nil
 }
 
 func (a *app) run(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer func() {
+		cancel()
+		a.shutdown()
+	}()
+
 	if err := a.api.Templates.Run(ctx); err != nil {
 		return fmt.Errorf("generate templates: %w", err)
+	}
+	if err := a.api.Monitor.Run(ctx, a.config); err != nil {
+		return fmt.Errorf("run monitor: %w", err)
 	}
 
 	srvErr := make(chan error, 1)
@@ -150,14 +139,8 @@ func (a *app) run(ctx context.Context) error {
 	for {
 		select {
 		case <-a.config.FW:
-			// a broken configuration must not touch the running monitor:
-			// the previous (valid) configuration stays in effect until the file is fixed.
-			if err := a.config.Parse(); err != nil {
-				log.Printf("[ERROR] parse config: %v", err)
-				continue
-			}
-			if err := a.config.Validate(); err != nil {
-				log.Printf("[ERROR] validate config: %v", err)
+			if err := a.config.Reload(); err != nil {
+				log.Printf("[ERROR] reload config: %v", err)
 				continue
 			}
 			if err := a.api.Monitor.Run(ctx, a.config); err != nil {
@@ -165,13 +148,11 @@ func (a *app) run(ctx context.Context) error {
 			}
 		case err := <-srvErr:
 			if err != nil {
-				a.shutdown()
 				return fmt.Errorf("rest server: %w", err)
 			}
+			return nil
 		case <-ctx.Done():
 			log.Print("[DEBUG] terminating...")
-			a.shutdown()
-			log.Print("[INFO] terminated")
 			return nil
 		}
 	}

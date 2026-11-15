@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/exelban/EndPoll/types"
@@ -14,11 +15,19 @@ type Teams struct {
 	client *http.Client
 }
 
-func (t *Teams) string() string {
+// NewTeams - creates a Teams notification provider.
+func NewTeams(cfg *types.Teams) *Teams {
+	return &Teams{
+		url:    cfg.WebhookURL,
+		client: &http.Client{Timeout: httpTimeout},
+	}
+}
+
+func (t *Teams) String() string {
 	return "teams"
 }
 
-func (t *Teams) send(_, subject, body string) error {
+func (t *Teams) Send(ctx context.Context, _, subject, body string) error {
 	blocks := []map[string]any{}
 	if subject != "" {
 		blocks = append(blocks, map[string]any{
@@ -52,10 +61,10 @@ func (t *Teams) send(_, subject, body string) error {
 			},
 		},
 	}
-	return postJSON(t.client, http.MethodPost, t.url, nil, payload)
+	return postJSON(ctx, t.client, http.MethodPost, t.url, nil, payload)
 }
 
-func (t *Teams) normalize(host *types.Host, status types.StatusType) (string, string) {
+func (t *Teams) Normalize(host *types.Host, status types.StatusType) (string, string) {
 	subject, text := plainMessage(host, status)
 	return subject, text
 }

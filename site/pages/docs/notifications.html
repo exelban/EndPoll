@@ -1,0 +1,65 @@
+---
+layout: "guide.html"
+title: "Slack, Telegram & Email Uptime Alerts | EndPoll"
+description: "Set up Slack, Telegram, and SMTP email alerts for EndPoll. Route downtime and recovery notifications per host and configure notification cooldowns."
+canonicalPath: "/docs/notifications"
+heading: "Set up Slack, Telegram, and email alerts"
+intro: "Receive downtime and recovery notifications from EndPoll. Connect your providers, route hosts to specific channels, and control repeated alerts."
+---
+<p>Configure providers under the top-level <code>notifications</code> section in <code>config.yaml</code>. When combining the examples below, keep one <code>notifications</code> section and place each provider inside it.</p>
+<p>EndPoll sends host alerts when status changes after the configured success or failure thresholds. A failed delivery to one channel does not prevent delivery to the other configured channels.</p>
+
+<h2 id="slack">Send uptime alerts to Slack</h2>
+<p>Create a Slack app with a bot token and the <code>chat:write</code> permission, install it in your workspace, and invite the bot to your monitoring channel. Copy its bot token and use the channel's ID in your config:</p>
+<pre><code>notifications:
+  slack:
+    token: "xoxb-replace-with-your-bot-token"
+    channel: "C0123456789"</code></pre>
+<p>EndPoll posts through Slack's <a href="https://docs.slack.dev/reference/methods/chat.postMessage/" target="_blank" rel="noopener noreferrer">chat.postMessage API</a>. The configured bot needs access to the destination channel, including membership for private channels.</p>
+
+<h2 id="telegram">Send alerts to Telegram</h2>
+<p>Create a bot with <a href="https://core.telegram.org/bots/features#botfather" target="_blank" rel="noopener noreferrer">BotFather</a>, then start a conversation with the bot or add it to a group. Set its token and the IDs of the chats that should receive alerts:</p>
+<pre><code>notifications:
+  telegram:
+    token: "123456:replace-with-your-bot-token"
+    chatIDs:
+      - "111111111"
+      - "-1002222222222"</code></pre>
+<p>Chat IDs are numeric identifiers, not usernames. For a new bot without a webhook, send it a message and inspect <code>message.chat.id</code> in the <a href="https://core.telegram.org/bots/api#getupdates" target="_blank" rel="noopener noreferrer">getUpdates response</a> using your bot token. Group chat IDs can be negative.</p>
+
+<h2 id="email">Send email through SMTP</h2>
+<p>Use the SMTP settings supplied by your email provider. Port 587 is commonly used for STARTTLS; use the host and port your provider specifies.</p>
+<pre><code>notifications:
+  smtp:
+    host: smtp.example.com
+    port: 587
+    username: monitor@example.com
+    password: replace-with-your-smtp-password
+    from: endpoll@example.com
+    to:
+      - admin@example.com
+    insecureSkipVerify: false</code></pre>
+<p>The provider must allow the configured sender address. Keep certificate verification enabled. Provider credentials belong in the server's configuration file; do not publish them with your status-page content or commit them to a public repository.</p>
+
+<h2 id="routing">Choose notification channels per host</h2>
+<p>By default, hosts notify all configured providers. Set an <code>alerts</code> list on a host to limit delivery. These values are EndPoll provider names; the email provider is named <code>smtp</code>.</p>
+<pre><code>hosts:
+  - name: Checkout API
+    url: https://api.example.com/health
+    alerts: ["slack", "smtp"]
+  - name: Personal website
+    url: https://example.com
+    alerts: ["telegram"]</code></pre>
+<p>Each selected provider must also be configured under <code>notifications</code>.</p>
+
+<h2 id="cooldown">Control repeated alerts</h2>
+<pre><code>notifications:
+  initializationMessage: true
+  shutdownMessage: false
+  cooldown: 5m</code></pre>
+<p>The default cooldown is five minutes between identical notifications for the same host, status, and channel. A recovery has a different status from a downtime alert. Set <code>cooldown: 0</code> to disable suppression.</p>
+<p>Startup messages are enabled by default and can help confirm that a provider is connected. Configuration reloads do not resend them. To verify host alerts, use a test endpoint you control, make it fail, wait for the configured failure threshold, and restore it to check recovery delivery. See the <a href="/docs/monitoring#http">HTTP check example</a> for threshold settings.</p>
+
+<h2 id="other-providers">Other supported notification providers</h2>
+<p>EndPoll also supports Discord, Microsoft Teams, Mattermost and Rocket.Chat, Pushover, ntfy, Twilio SMS, BotComm, and generic HTTP webhooks. Provider keys for the <code>alerts</code> list are <code>discord</code>, <code>teams</code>, <code>mattermost</code>, <code>pushover</code>, <code>ntfy</code>, <code>twilio</code>, <code>botcomm</code>, and <code>webhook</code>.</p>
+<p>Find their configuration fields in the <a href="https://github.com/exelban/EndPoll#notifications" target="_blank" rel="noopener noreferrer">notification reference on GitHub</a>. For a new installation, start with the <a href="/docs/docker">Docker setup guide</a>.</p>

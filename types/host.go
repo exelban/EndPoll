@@ -74,20 +74,21 @@ func (h *Host) GenerateID() string {
 // Status - checking if provided code present in the success code list and body is equal
 func (h *Host) Status(code int, b []byte) bool {
 	ok := false
-	if h.Conditions == nil {
-		h.Conditions = &Success{
+	conditions := h.Conditions
+	if conditions == nil {
+		conditions = &Success{
 			Code: []int{http.StatusOK},
 		}
 	}
 
-	for _, v := range h.Conditions.Code {
+	for _, v := range conditions.Code {
 		if v == code {
 			ok = true
 		}
 	}
 
-	if ok && h.Conditions.Body != nil {
-		ok = bytes.Compare([]byte(*h.Conditions.Body), b) == 0
+	if ok && conditions.Body != nil {
+		ok = bytes.Compare([]byte(*conditions.Body), b) == 0
 	}
 
 	return ok

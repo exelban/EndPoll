@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/exelban/EndPoll/types"
@@ -16,11 +17,21 @@ type Mattermost struct {
 	client *http.Client
 }
 
-func (m *Mattermost) string() string {
+// NewMattermost - creates a Mattermost notification provider.
+func NewMattermost(cfg *types.Mattermost) *Mattermost {
+	return &Mattermost{
+		url:      cfg.WebhookURL,
+		channel:  cfg.Channel,
+		username: cfg.Username,
+		client:   &http.Client{Timeout: httpTimeout},
+	}
+}
+
+func (m *Mattermost) String() string {
 	return "mattermost"
 }
 
-func (m *Mattermost) send(_, subject, body string) error {
+func (m *Mattermost) Send(ctx context.Context, _, subject, body string) error {
 	if body == "" {
 		body = subject
 	}
@@ -33,11 +44,9 @@ func (m *Mattermost) send(_, subject, body string) error {
 		Channel:  m.channel,
 		Username: m.username,
 	}
-	return postJSON(m.client, http.MethodPost, m.url, nil, payload)
+	return postJSON(ctx, m.client, http.MethodPost, m.url, nil, payload)
 }
 
-func (m *Mattermost) normalize(host *types.Host, status types.StatusType) (string, string) {
-	subject, _ := plainMessage(host, status)
-	text := "**" + subject + "**\n" + host.SecureURL()
-	return subject, text
+func (m *Mattermost) Normalize(host *types.Host, status types.StatusType) (string, string) {
+	return boldMessage(host, status)
 }

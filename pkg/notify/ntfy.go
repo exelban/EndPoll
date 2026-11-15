@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -18,11 +19,31 @@ type Ntfy struct {
 	client *http.Client
 }
 
-func (n *Ntfy) string() string {
+// NewNtfy - creates a Ntfy notification provider.
+func NewNtfy(cfg *types.Ntfy) *Ntfy {
+	server := cfg.URL
+	if server == "" {
+		server = "https://ntfy.sh"
+	}
+	priority := cfg.Priority
+	if priority == 0 {
+		priority = 3
+	}
+
+	return &Ntfy{
+		url:      server,
+		topic:    cfg.Topic,
+		token:    cfg.Token,
+		priority: priority,
+		client:   &http.Client{Timeout: httpTimeout},
+	}
+}
+
+func (n *Ntfy) String() string {
 	return "ntfy"
 }
 
-func (n *Ntfy) send(_, subject, body string) error {
+func (n *Ntfy) Send(ctx context.Context, _, subject, body string) error {
 	if body == "" {
 		body = subject
 	}
@@ -49,10 +70,10 @@ func (n *Ntfy) send(_, subject, body string) error {
 	if n.token != "" {
 		headers["Authorization"] = "Bearer " + n.token
 	}
-	return postJSON(n.client, http.MethodPost, strings.TrimSuffix(n.url, "/"), headers, payload)
+	return postJSON(ctx, n.client, http.MethodPost, strings.TrimSuffix(n.url, "/"), headers, payload)
 }
 
-func (n *Ntfy) normalize(host *types.Host, status types.StatusType) (string, string) {
+func (n *Ntfy) Normalize(host *types.Host, status types.StatusType) (string, string) {
 	subject, _ := plainMessage(host, status)
 	text := host.String() + " has a new status: " + strings.ToUpper(string(status))
 	return subject, text

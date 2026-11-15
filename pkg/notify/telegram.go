@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/exelban/EndPoll/types"
@@ -22,39 +21,35 @@ type Telegram struct {
 	timeout time.Duration
 }
 
-func (t *Telegram) string() string {
+// NewTelegram - creates a Telegram notification provider.
+func NewTelegram(cfg *types.Telegram) *Telegram {
+	return &Telegram{
+		token:   cfg.Token,
+		chatIDs: cfg.ChatIDs,
+		timeout: httpTimeout,
+	}
+}
+
+func (t *Telegram) String() string {
 	return "telegram"
 }
 
-func (t *Telegram) send(_, subject, body string) error {
-	g, _ := errgroup.WithContext(context.Background())
+func (t *Telegram) Send(ctx context.Context, _, subject, body string) error {
+	var g errgroup.Group
 	for _, chatID := range t.chatIDs {
 		id := chatID
 		g.Go(func() error {
-			return t.sendToChat(id, body)
+			return t.sendToChat(ctx, id, body)
 		})
 	}
 	return g.Wait()
 }
 
-func (t *Telegram) normalize(host *types.Host, status types.StatusType) (string, string) {
-	icon := "❌"
-	if status == types.UP {
-		icon = "✅"
-	}
-
-	name := host.URL
-	if host.Name != nil && *host.Name != "" {
-		name = *host.Name
-	}
-
-	text := fmt.Sprintf("%s: `%s` has a new status: %s", icon, host.String(), strings.ToUpper(string(status)))
-	subject := fmt.Sprintf("%s: %s is %s", icon, name, strings.ToUpper(string(status)))
-
-	return subject, text
+func (t *Telegram) Normalize(host *types.Host, status types.StatusType) (string, string) {
+	return codeMessage(host, status)
 }
 
-func (t *Telegram) sendToChat(chatID, msg string) error {
+func (t *Telegram) sendToChat(ctx context.Context, chatID, msg string) error {
 	b, err := json.Marshal(struct {
 		ChatID string `json:"chat_id"`
 		Text   string `json:"text"`
@@ -67,7 +62,7 @@ func (t *Telegram) sendToChat(chatID, msg string) error {
 	}
 
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", t.token)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(b))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(b))
 	if err != nil {
 		return fmt.Errorf("failed to create a new request: %w", err)
 	}

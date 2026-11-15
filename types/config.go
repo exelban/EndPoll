@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/exelban/EndPoll/pkg"
 	"gopkg.in/yaml.v3"
 )
 
@@ -217,10 +218,6 @@ type Cfg struct {
 	FileHosts     []*Host       `json:"hosts" yaml:"hosts"`
 	Hosts         []*Host       `json:"-" yaml:"-"`
 
-	// DefaultSMTP - SMTP settings provided via CLI flags/env. Used when the
-	// configuration file does not define notifications.smtp.
-	DefaultSMTP *SMTP `json:"-" yaml:"-"`
-
 	path string    `yaml:"-"`
 	FW   chan bool `yaml:"-"`
 
@@ -247,29 +244,29 @@ func NewConfig(ctx context.Context, path string) (*Cfg, error) {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 
+	changes, err := pkg.WatchFile(ctx, path, time.Second, true)
+	if err != nil {
+		return nil, fmt.Errorf("watch config: %w", err)
+	}
+
 	go func() {
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
 		modTimestamp := time.Time{}
 		for {
 			select {
-			case <-ticker.C:
-				fi, err := os.Stat(path)
-				if err != nil {
-					continue
+			case ts, ok := <-changes:
+				if !ok {
+					return
 				}
-				if fi.ModTime() != modTimestamp {
-					if modTimestamp.IsZero() {
-						log.Print("[DEBUG] loading config")
-					} else {
-						log.Printf("[DEBUG] config changed: %s -> %s",
-							modTimestamp.Format(time.RFC3339Nano), fi.ModTime().Format(time.RFC3339Nano))
-					}
-					modTimestamp = fi.ModTime()
-					select {
-					case cfg.FW <- true:
-					default: // a reload is already pending
-					}
+				if modTimestamp.IsZero() {
+					log.Print("[DEBUG] loading config")
+				} else {
+					log.Printf("[DEBUG] config changed: %s -> %s",
+						modTimestamp.Format(time.RFC3339Nano), ts.Format(time.RFC3339Nano))
+				}
+				modTimestamp = ts
+				select {
+				case cfg.FW <- true:
+				default: // a reload is already pending
 				}
 			case <-ctx.Done():
 				return
@@ -308,6 +305,33 @@ func (c *Cfg) Parse() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	c.apply(fresh)
+	return nil
+}
+
+func (c *Cfg) Reload() error {
+	c.mu.RLock()
+	fresh := &Cfg{
+		path: c.path,
+	}
+	c.mu.RUnlock()
+
+	if err := fresh.Parse(); err != nil {
+		return err
+	}
+	if err := fresh.Validate(); err != nil {
+		return err
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.apply(fresh)
+	c.Hosts = fresh.Hosts
+	return nil
+}
+
+func (c *Cfg) apply(fresh *Cfg) {
 	c.Interval = fresh.Interval
 	c.Timeout = fresh.Timeout
 	c.InitialDelay = fresh.InitialDelay
@@ -321,8 +345,6 @@ func (c *Cfg) Parse() error {
 	c.Notifications = fresh.Notifications
 	c.FileHosts = fresh.FileHosts
 	c.Alerts = fresh.Alerts
-
-	return nil
 }
 
 // Validate - fills the defaults, validates the values and builds the list of hosts
@@ -361,15 +383,14 @@ func (c *Cfg) Validate() error {
 	if c.FailureThreshold == 0 {
 		c.FailureThreshold = DefaultFailureThreshold
 	}
+	if c.SuccessThreshold < 0 || c.FailureThreshold < 0 {
+		return errors.New("successThreshold and failureThreshold must be positive")
+	}
 
 	// DEPRECATED: migrate Alerts to Notifications
 	if c.Alerts != nil {
 		log.Print("[WARN] 'alerts' field is deprecated, please use 'notifications' instead")
 		c.Notifications = *c.Alerts
-	}
-	if c.Notifications.SMTP == nil && c.DefaultSMTP != nil {
-		smtp := *c.DefaultSMTP
-		c.Notifications.SMTP = &smtp
 	}
 	if c.Notifications.Cooldown == nil {
 		d := DefaultCooldown
@@ -382,7 +403,14 @@ func (c *Cfg) Validate() error {
 	}
 
 	hosts := make([]*Host, 0, len(c.FileHosts))
-	for i, host := range c.FileHosts {
+	hostIDs := make(map[string]bool, len(c.FileHosts))
+	for i, h := range c.FileHosts {
+		if h == nil {
+			return fmt.Errorf("host %d cannot be null", i+1)
+		}
+
+		copy := *h
+		host := &copy
 		if host.URL == "" {
 			return errors.New("host cannot be without url")
 		}
@@ -394,6 +422,9 @@ func (c *Cfg) Validate() error {
 		}
 		if host.InitialDelay != nil && *host.InitialDelay < 0 {
 			return fmt.Errorf("host %s: initialDelay must be positive, got %s", host.URL, *host.InitialDelay)
+		}
+		if host.SuccessThreshold < 0 || host.FailureThreshold < 0 {
+			return fmt.Errorf("host %s: successThreshold and failureThreshold must be positive", host.SecureURL())
 		}
 
 		host.ID = host.GenerateID()
@@ -414,9 +445,14 @@ func (c *Cfg) Validate() error {
 			d := *c.InitialDelay
 			host.InitialDelay = &d
 		}
-		if host.Conditions == nil {
-			host.Conditions = c.Conditions
-		} else if len(host.Conditions.Code) == 0 {
+
+		conditions := c.Conditions
+		if host.Conditions != nil {
+			conditions = host.Conditions
+		}
+		success := *conditions
+		host.Conditions = &success
+		if len(host.Conditions.Code) == 0 {
 			host.Conditions.Code = c.Conditions.Code
 		}
 
@@ -427,8 +463,9 @@ func (c *Cfg) Validate() error {
 			host.FailureThreshold = c.FailureThreshold
 		}
 
-		if host.Headers == nil {
-			host.Headers = make(map[string]string)
+		host.Headers = make(map[string]string, len(h.Headers)+len(c.Headers))
+		for key, value := range h.Headers {
+			host.Headers[key] = value
 		}
 		for key, value := range c.Headers {
 			if _, ok := host.Headers[key]; !ok {
@@ -436,11 +473,10 @@ func (c *Cfg) Validate() error {
 			}
 		}
 
-		for _, h := range hosts {
-			if h.ID == host.ID {
-				return fmt.Errorf("duplicate host: %s", host.String())
-			}
+		if hostIDs[host.ID] {
+			return fmt.Errorf("duplicate host: %s", host.String())
 		}
+		hostIDs[host.ID] = true
 		hosts = append(hosts, host)
 
 		msg := fmt.Sprintf("[DEBUG] id=%s", host.ID)
@@ -452,14 +488,7 @@ func (c *Cfg) Validate() error {
 	}
 
 	for _, old := range c.Hosts {
-		found := false
-		for _, h := range hosts {
-			if h.ID == old.ID {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !hostIDs[old.ID] {
 			log.Printf("[WARN] remove host id=%s: %s", old.ID, old.SecureURL())
 		}
 	}

@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"log"
@@ -36,19 +37,36 @@ type SMTP struct {
 	mu sync.Mutex
 }
 
-func (s *SMTP) string() string {
+// NewSMTP - creates a SMTP notification provider.
+func NewSMTP(cfg *types.SMTP) *SMTP {
+	return &SMTP{
+		Host:               cfg.Host,
+		Port:               cfg.Port,
+		Username:           cfg.Username,
+		Password:           cfg.Password,
+		From:               cfg.From,
+		To:                 cfg.To,
+		InsecureSkipVerify: cfg.InsecureSkipVerify,
+	}
+}
+
+func (s *SMTP) String() string {
 	return "smtp"
 }
 
-// send - delivers the message reusing an open connection when possible.
+// Send - delivers the message reusing an open connection when possible.
 // The whole operation is serialized: the connection, the idle timer and the
 // rate limiter are all guarded by the same lock.
-func (s *SMTP) send(id, subject, body string) error {
+func (s *SMTP) Send(ctx context.Context, id, subject, body string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	if s.dialer == nil {
 		s.dialer = gomail.NewDialer(s.Host, s.Port, s.Username, s.Password)
+		s.dialer.RetryFailure = false
 		s.dialer.TLSConfig = &tls.Config{
 			ServerName:         s.Host,
 			InsecureSkipVerify: s.InsecureSkipVerify, //nolint:gosec // opt-in via configuration
@@ -57,7 +75,20 @@ func (s *SMTP) send(id, subject, body string) error {
 
 	if !s.last.IsZero() {
 		if wait := smtpMinInterval - time.Since(s.last); wait > 0 {
-			time.Sleep(wait)
+			select {
+			case <-time.After(wait):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	}
+	s.dialer.Timeout = httpTimeout
+	if deadline, ok := ctx.Deadline(); ok {
+		if remaining := time.Until(deadline); remaining < s.dialer.Timeout {
+			if remaining <= 0 {
+				return context.DeadlineExceeded
+			}
+			s.dialer.Timeout = remaining
 		}
 	}
 
@@ -139,7 +170,7 @@ func (s *SMTP) closeLocked() {
 	s.sendCloser = nil
 }
 
-func (s *SMTP) normalize(host *types.Host, status types.StatusType) (string, string) {
+func (s *SMTP) Normalize(host *types.Host, status types.StatusType) (string, string) {
 	icon := "❌"
 	if status == types.UP {
 		icon = "✅"

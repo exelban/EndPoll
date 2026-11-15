@@ -1,9 +1,11 @@
 package notify
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 
@@ -17,12 +19,12 @@ func TestBotComm(t *testing.T) {
 		defer srv.Close()
 
 		b := &BotComm{url: srv.URL + "/message", clientID: "client", clientSecret: "secret", sessionIDs: []string{"session-1", "session-2"}}
-		require.Equal(t, "botcomm", b.string())
+		require.Equal(t, "botcomm", b.String())
 
-		subject, body := b.normalize(testHost(), types.DOWN)
+		subject, body := b.Normalize(testHost(), types.DOWN)
 		require.Equal(t, "❌ Google is DOWN", subject)
 		require.Equal(t, "❌ Google (https://www.google.com) has a new status: DOWN", body)
-		require.NoError(t, b.send("evt", subject, body))
+		require.NoError(t, b.Send(context.Background(), "evt", subject, body))
 		require.Equal(t, 2, srv.count())
 
 		srv.mu.Lock()
@@ -36,7 +38,7 @@ func TestBotComm(t *testing.T) {
 			require.True(t, ok)
 			require.Equal(t, "client", id)
 			require.Equal(t, "secret", secret)
-			require.Equal(t, map[string]any{"content": body, "sessionID": b.sessionIDs[i]}, jsonBody(t, r.body))
+			require.Equal(t, map[string]any{"content": body, "subject": subject, "sessionID": b.sessionIDs[i]}, jsonBody(t, r.body))
 		}
 	})
 
@@ -45,13 +47,13 @@ func TestBotComm(t *testing.T) {
 		defer srv.Close()
 
 		b := &BotComm{url: srv.URL, clientID: "client", clientSecret: "secret"}
-		require.NoError(t, b.send("evt", "EndPoll status", "I'm online"))
+		require.NoError(t, b.Send(context.Background(), "evt", "EndPoll status", "I'm online"))
 		require.Equal(t, 1, srv.count())
-		require.Equal(t, map[string]any{"content": "I'm online", "broadcast": true}, jsonBody(t, srv.last().body))
+		require.Equal(t, map[string]any{"content": "I'm online", "subject": "EndPoll status", "broadcast": true}, jsonBody(t, srv.last().body))
 
 		b.sessionIDs = []string{}
-		require.NoError(t, b.send("evt", "EndPoll status", ""))
-		require.Equal(t, map[string]any{"content": "EndPoll status", "broadcast": true}, jsonBody(t, srv.last().body))
+		require.NoError(t, b.Send(context.Background(), "evt", "EndPoll status", ""))
+		require.Equal(t, map[string]any{"content": "EndPoll status", "subject": "EndPoll status", "broadcast": true}, jsonBody(t, srv.last().body))
 	})
 
 	t.Run("empty session IDs are rejected before sending", func(t *testing.T) {
@@ -60,7 +62,7 @@ func TestBotComm(t *testing.T) {
 
 		for _, id := range []string{"", " \t\n"} {
 			b := &BotComm{url: srv.URL, sessionIDs: []string{"valid", id}}
-			require.EqualError(t, b.send("evt", "subject", "body"), "botcomm: empty session ID")
+			require.EqualError(t, b.Send(context.Background(), "evt", "subject", "body"), "botcomm: empty session ID")
 		}
 		require.Zero(t, srv.count())
 	})
@@ -88,7 +90,7 @@ func TestBotComm(t *testing.T) {
 		defer srv.Close()
 
 		b := &BotComm{url: srv.URL, sessionIDs: []string{"session-1", "session-2", "session-3"}}
-		err := b.send("evt", "subject", "body")
+		err := b.Send(context.Background(), "evt", "subject", "body")
 		require.ErrorContains(t, err, "404")
 		require.ErrorContains(t, err, "unknown session")
 		mu.Lock()
@@ -101,39 +103,56 @@ func TestBotComm(t *testing.T) {
 		defer srv.Close()
 
 		b := &BotComm{url: srv.URL}
-		require.ErrorContains(t, b.send("evt", "subject", "body"), "429")
+		require.ErrorContains(t, b.Send(context.Background(), "evt", "subject", "body"), "429")
 		require.Equal(t, 1, srv.count())
 	})
 }
 
-func TestNew_BotComm(t *testing.T) {
-	cfg := &types.Cfg{Notifications: types.Notifications{
-		BotComm: &types.BotComm{ClientID: "client", ClientSecret: "secret", SessionIDs: []string{"session"}},
-	}}
-	n, err := New(cfg)
-	require.NoError(t, err)
-	require.Len(t, n.clients, 1)
+func TestBotComm_Subject(t *testing.T) {
+	tests := []struct {
+		name    string
+		subject string
+		body    string
+		want    string
+	}{
+		{name: "empty", body: "Status changed"},
+		{name: "whitespace", subject: " \t\n ", body: "Status changed"},
+		{name: "trimmed", subject: "  ❌ API is DOWN  ", body: "Status changed", want: "❌ API is DOWN"},
+		{name: "control characters", subject: "API\r\nstatus\tDOWN\x00\u0085", body: "Status changed", want: "API  status DOWN"},
+		{name: "line separators", subject: "API\u2028status\u2029DOWN", body: "Status changed", want: "API status DOWN"},
+		{name: "unicode limit", subject: strings.Repeat("🔥", 256), body: "Status changed", want: strings.Repeat("🔥", 256)},
+		{name: "long unicode subject", subject: strings.Repeat("🔥", 257), body: "Status changed", want: strings.Repeat("🔥", 255) + "…"},
+		{name: "fallback preserves original subject", subject: "API\n" + strings.Repeat("🔥", 256), want: "API " + strings.Repeat("🔥", 251) + "…"},
+	}
 
-	b := n.clients[0].(*BotComm)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := newCapture(http.StatusOK)
+			defer srv.Close()
+
+			b := &BotComm{url: srv.URL, sessionIDs: []string{"session"}}
+			require.NoError(t, b.Send(context.Background(), "evt", tc.subject, tc.body))
+
+			payload := jsonBody(t, srv.last().body)
+			if tc.want == "" {
+				require.NotContains(t, payload, "subject")
+			} else {
+				require.Equal(t, tc.want, payload["subject"])
+			}
+			body := tc.body
+			if body == "" {
+				body = tc.subject
+			}
+			require.Equal(t, body, payload["content"])
+		})
+	}
+}
+
+func TestNewBotComm(t *testing.T) {
+	b := NewBotComm(&types.BotComm{ClientID: "client", ClientSecret: "secret", SessionIDs: []string{"session"}})
 	require.Equal(t, "https://api.botcomm.app/message", b.url)
 	require.Equal(t, "client", b.clientID)
 	require.Equal(t, "secret", b.clientSecret)
 	require.Equal(t, []string{"session"}, b.sessionIDs)
 	require.Equal(t, httpTimeout, b.client.Timeout)
-
-	srv := newCapture(http.StatusOK)
-	defer srv.Close()
-	b.url = srv.URL
-
-	host := testHost()
-	host.Alerts = []string{"telegram"}
-	require.NoError(t, n.Send(host, types.DOWN))
-	require.Zero(t, srv.count())
-
-	host.Alerts = []string{"botcomm"}
-	require.NoError(t, n.Send(host, types.UP))
-	require.Equal(t, "✅ Google (https://www.google.com) has a new status: UP", jsonBody(t, srv.last().body)["content"])
-
-	n.Startup()
-	require.Equal(t, "I'm online", jsonBody(t, srv.last().body)["content"])
 }

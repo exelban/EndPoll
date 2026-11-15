@@ -19,13 +19,18 @@ type Server struct {
 	WriteTimeout      time.Duration
 	IdleTimeout       time.Duration
 
-	srv *http.Server
-	mu  sync.Mutex
+	srv     *http.Server
+	stopped bool
+	mu      sync.Mutex
 }
 
 // Run - will initialize server and run it on provided port
 func (s *Server) Run(router http.Handler) error {
 	s.mu.Lock()
+	if s.stopped {
+		s.mu.Unlock()
+		return nil
+	}
 	if s.Address == "*" {
 		s.Address = ""
 	}
@@ -71,8 +76,10 @@ func (s *Server) Shutdown() error {
 	log.Print("[INFO] shutdown rest server")
 
 	s.mu.Lock()
+	s.stopped = true
 	srv := s.srv
 	s.mu.Unlock()
+
 	if srv == nil {
 		return nil
 	}

@@ -1,0 +1,14 @@
+{
+  "name": "site",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "eleventy --serve --port=47011",
+    "build": "eleventy",
+    "generate": "eleventy",
+    "deploy": "yarn build && npx wrangler pages deploy ./_site --project-name endpoll --branch master --commit-dirty=true"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "3.1.6"
+  }
+}

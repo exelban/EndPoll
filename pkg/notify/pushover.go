@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -18,11 +19,22 @@ type Pushover struct {
 	client *http.Client
 }
 
-func (p *Pushover) string() string {
+// NewPushover - creates a Pushover notification provider.
+func NewPushover(cfg *types.Pushover) *Pushover {
+	return &Pushover{
+		url:      "https://api.pushover.net/1/messages.json",
+		token:    cfg.Token,
+		user:     cfg.User,
+		priority: cfg.Priority,
+		client:   &http.Client{Timeout: httpTimeout},
+	}
+}
+
+func (p *Pushover) String() string {
 	return "pushover"
 }
 
-func (p *Pushover) send(_, subject, body string) error {
+func (p *Pushover) Send(ctx context.Context, _, subject, body string) error {
 	if body == "" {
 		body = subject
 	}
@@ -38,10 +50,10 @@ func (p *Pushover) send(_, subject, body string) error {
 		values.Set("retry", "60")
 		values.Set("expire", "3600")
 	}
-	return postForm(p.client, p.url, nil, values)
+	return postForm(ctx, p.client, p.url, nil, values)
 }
 
-func (p *Pushover) normalize(host *types.Host, status types.StatusType) (string, string) {
+func (p *Pushover) Normalize(host *types.Host, status types.StatusType) (string, string) {
 	subject, text := plainMessage(host, status)
 	return subject, text
 }

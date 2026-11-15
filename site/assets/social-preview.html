@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>EndPoll social preview</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        width: 1200px;
+        height: 630px;
+        padding: 56px 64px;
+        background: #F9F9F9;
+        color: #111827;
+        font-family: Arial, sans-serif;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 42px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 28px;
+        font-weight: 700;
+      }
+
+      .domain {
+        color: #6b7280;
+        font-size: 21px;
+      }
+
+      h1 {
+        margin: 0 0 22px;
+        font-size: 62px;
+        line-height: 1.08;
+        letter-spacing: -2px;
+      }
+
+      .description {
+        margin: 0 0 34px;
+        color: #4b5563;
+        font-size: 23px;
+      }
+
+      .dashboard {
+        padding: 24px 28px;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        box-shadow: 0 4px 12px #11182708;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 18px;
+      }
+
+      .host {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .hostname, .history {
+        color: #6b7280;
+      }
+
+      .status {
+        color: #15803d;
+        font-weight: 600;
+      }
+
+      .bars {
+        height: 42px;
+        margin: 18px 0 12px;
+        background: repeating-linear-gradient(to right, #47A417 0, #47A417 8px, transparent 8px, transparent 11px);
+        position: relative;
+      }
+
+      .incident {
+        position: absolute;
+        height: 42px;
+        width: 8px;
+        background: #EE402E;
+        left: 264px;
+      }
+
+      .degraded {
+        background: #E8AE01;
+        left: 275px;
+      }
+
+      .history {
+        font-size: 15px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand"><img src="../public/icon.png" alt="" width="40" height="40">EndPoll</div>
+      <span class="domain">endpoll.com</span>
+    </header>
+    <h1>Self-hosted status page<br>and uptime monitoring</h1>
+    <p class="description">Free and open source. Your services. Your infrastructure.</p>
+    <div class="dashboard">
+      <div class="row">
+        <div class="host"><strong>API Server</strong><span class="hostname">api.example.com</span></div>
+        <span class="status">Operational</span>
+      </div>
+      <div class="bars"><span class="incident"></span><span class="incident degraded"></span></div>
+      <div class="row history"><span>90 days ago</span><span>Sample uptime history</span><span>Today</span></div>
+    </div>
+  </body>
+</html>

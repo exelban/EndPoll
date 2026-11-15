@@ -36,13 +36,13 @@ func CORS(next http.Handler) http.Handler {
 	})
 }
 
-func Ping(path ...string) func(http.Handler) http.Handler {
+func Health(path ...string) func(http.Handler) http.Handler {
 	handlers := make(map[string]bool)
 	for _, p := range path {
 		handlers[p] = true
 	}
 	if len(handlers) == 0 {
-		handlers["/ping"] = true
+		handlers["/healthz"] = true
 	}
 
 	f := func(h http.Handler) http.Handler {
@@ -70,7 +70,7 @@ func Auth(settings func() *types.BasicAuth) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			if r.URL.Path == "/ping" {
+			if r.URL.Path == "/healthz" {
 				next.ServeHTTP(w, r)
 				return
 			}

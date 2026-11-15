@@ -1,0 +1,91 @@
+---
+layout: "guide.html"
+title: "HTTP, Database & Network Uptime Monitoring | EndPoll"
+description: "Configure HTTP, MongoDB, Redis, PostgreSQL, MySQL, TCP, DNS, and ping checks in EndPoll. Track uptime and connect Prometheus metrics to Grafana."
+canonicalPath: "/docs/monitoring"
+heading: "HTTP and database uptime monitoring"
+intro: "Check websites, APIs, databases, and network services from one EndPoll configuration. Track uptime, response times, incidents, and TLS certificate expiry."
+---
+<p>Start with the <a href="/docs/docker">Docker installation guide</a> if EndPoll is not running yet. The following examples go in <code>config.yaml</code>. Keep one top-level <code>hosts</code> list and add each service beneath it.</p>
+
+<h2 id="http">Monitor websites and HTTP APIs</h2>
+<p>Use an HTTP or HTTPS URL for each endpoint. Set the expected response code and, optionally, an exact response body. Per-host settings override the global interval and timeout.</p>
+<pre><code>interval: 30s
+timeout: 10s
+failureThreshold: 2
+successThreshold: 1
+
+hosts:
+  - name: Website
+    url: https://example.com
+    conditions:
+      code: [200]
+  - name: API health
+    url: https://api.example.com/health
+    interval: 15s
+    timeout: 5s
+    conditions:
+      code: [200]
+      body: "ok"
+    headers:
+      Authorization: "Bearer replace-with-your-token"</code></pre>
+<p>The <code>failureThreshold</code> controls how many consecutive failures are needed to mark a host down. The <code>successThreshold</code> controls recovery. These settings help avoid status changes caused by a single transient failure.</p>
+<p>HTTPS checks also collect TLS certificate expiry information. A host's detail page shows response-time history and HTTP timing details such as DNS lookup, connection, TLS handshake, and time to first byte.</p>
+
+<h2 id="databases">Monitor MongoDB, Redis, PostgreSQL, and MySQL</h2>
+<p>EndPoll detects the check type from the connection URL. Use credentials with only the access required for monitoring, and replace the sample hostnames with addresses reachable from the EndPoll container.</p>
+<pre><code>hosts:
+  - name: MongoDB
+    url: mongodb://monitor:password@mongo.internal:27017
+  - name: Redis
+    url: redis://:password@redis.internal:6379/0
+  - name: PostgreSQL
+    url: postgres://monitor:password@postgres.internal:5432/app?sslmode=require
+  - name: MySQL
+    url: mysql://monitor:password@mysql.internal:3306/app</code></pre>
+<p>MongoDB checks connect and ping the database. Redis checks authenticate when credentials are present, select the configured database, and send <code>PING</code>. PostgreSQL and MySQL checks connect and run <code>SELECT 1</code>. Redis also supports TLS with a <code>rediss://</code> URL.</p>
+<p>Connection passwords containing URL-reserved characters must be percent-encoded. Inside a container, <code>localhost</code> refers to that container; use a shared Docker network and the database service name when both services run in Docker.</p>
+
+<h2 id="network">Check TCP ports, DNS, and ICMP</h2>
+<pre><code>hosts:
+  - name: Internal TCP service
+    url: tcp://service.internal:9000
+  - name: Website DNS
+    url: dns://example.com
+    dns:
+      type: A
+      resolver: "1.1.1.1:53"
+  - name: Router
+    url: 192.168.1.1</code></pre>
+<p>A TCP check opens a connection to the specified port. DNS checks resolve records of type A, AAAA, CNAME, MX, NS, or TXT; add an <code>expect</code> list under <code>dns</code> to require specific values in the answer. An IPv4 address without a scheme uses ICMP ping.</p>
+<p>ICMP checks on Linux require the <code>NET_RAW</code> capability, which Docker normally grants. If you have removed that capability, restore it for the EndPoll container to use ping checks.</p>
+
+<h2 id="groups">Group related services</h2>
+<p>Use the same <code>group</code> value to combine related hosts on the dashboard. A grouped host with <code>hidden: true</code> still contributes to the group status while staying out of the group view.</p>
+<pre><code>hosts:
+  - name: API
+    url: https://api.example.com/health
+    group: Application
+  - name: Database
+    url: tcp://postgres.internal:5432
+    group: Application
+    hidden: true</code></pre>
+
+<h2 id="metrics">Connect Prometheus, Grafana, and the JSON API</h2>
+<p>EndPoll exposes Prometheus metrics at <code>/metrics</code>. Add your EndPoll server as a scrape target, then use that Prometheus data source in Grafana:</p>
+<pre><code>scrape_configs:
+  - job_name: endpoll
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["endpoll:8822"]</code></pre>
+<p>Replace <code>endpoll:8822</code> with an address reachable from Prometheus. If <code>ui.basicAuth</code> is enabled, configure <code>basic_auth</code> in the scrape job too.</p>
+<ul>
+  <li><code>endpoll_host_up</code>: 1 for up, 0 for down or degraded; absent while status is unknown.</li>
+  <li><code>endpoll_host_response_seconds</code>: duration of the latest check.</li>
+  <li><code>endpoll_host_uptime_ratio</code>: uptime over the last 90 days, from 0 to 1.</li>
+  <li><code>endpoll_host_ssl_expiry_timestamp_seconds</code>: certificate expiry time for HTTPS hosts.</li>
+</ul>
+<p>For custom integrations, request <code>/api/hosts</code> for overall and per-host status, <code>/api/hosts/{id}</code> for host details, or <code>/api/incidents</code> for recent incidents. These endpoints use the same basic authentication as the dashboard when enabled.</p>
+
+<h2 id="alerts">Receive downtime and recovery alerts</h2>
+<p>Checks become more useful when a status change reaches the right person. Follow the <a href="/docs/notifications">notification setup guide</a> to connect providers and route each host to specific channels.</p>
